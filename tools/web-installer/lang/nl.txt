@@ -91,3 +91,13 @@ error.wrongdevice=Dit is geen Nest Learning Thermostat van de 2e generatie (prin
 error=Het ging mis
 again=Probeer deze stap opnieuw
 cancelled=Er is niets gekozen.
+
+thanks.title=Met dank aan
+thanks.gtvhacker=voor het vinden van de ingang in de thermostaat via zijn opstart-ROM, en voor het publiceren van de laders en de reddingskernel (NestDFUAttack).
+thanks.cuckoo=voor het bouwbaar houden van de bronnen van de laders en de kernel, en voor de wiki met het onderzoek naar de backplate en de Heat Link.
+thanks.omap=voor omap_loader, het programma waarvan de eerste stap van deze pagina het protocol volgt.
+thanks.foss=en de vele projecten in het image, voor de software waarmee dit alles gebouwd is.
+thanks.note=Geen van hen is verantwoordelijk voor deze installatie, en dit project is niet verbonden aan Google of Nest.
+thanks.more=Alle vermeldingen
+thanks.images=De imagebestanden die deze pagina laadt zijn vrije software. Wie elk bestand gemaakt heeft, de licentie en waar de broncode staat:
+thanks.images.link=de lijst

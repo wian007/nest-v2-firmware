@@ -501,7 +501,21 @@ int main(int argc, char **argv)
     for (;;) {
         char cmd[16], a[64], c[16]; unsigned long n = 0; int k;
         int r = get_line(line, sizeof line, started ? 0 : 1000);
-        if (r < 0) { if (is_init) { sleep(1); continue; } return 0; }
+        if (r < 0) {
+            /* The line is gone: the cable was pulled or the PC reset the port. As init, open
+             * it again and start over (seen on the device: after a reconnect nandio was deaf). */
+            if (!is_init) return 0;
+            if (strcmp(tty, "-")) {
+                struct termios t; int fd;
+                close(in_fd);
+                do { sleep(1); fd = open(tty, O_RDWR | O_NOCTTY); } while (fd < 0);
+                if (!tcgetattr(fd, &t)) { cooked = t; cfmakeraw(&t); t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0; tcsetattr(fd, TCSANOW, &t); }
+                in_fd = out_fd = fd;
+            } else sleep(1);
+            started = 0;
+            strcpy(show_title, "WAITING"); show_text[0] = 0; show_pct = -1; draw(0);
+            continue;
+        }
         if (r == 0) { say("J49NANDIO 1"); continue; }
         started = 1;
         cmd[0] = a[0] = c[0] = 0;

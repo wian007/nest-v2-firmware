@@ -142,6 +142,12 @@ docs/                see below
 | [docs/hw/](docs/hw) | Notes taken from the stock system: clocks, GPIO, pin mux |
 | [CHANGELOG.md](CHANGELOG.md) | Early history of the bring-up (until 23 November 2026); after that the git log |
 
+## Credits and contributing
+
+The way into the thermostat was found by GTVHacker and is kept alive by the cuckoo-nest
+project; the full list is in [CREDITS.md](CREDITS.md). How to contribute:
+[CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Licence
 
 Our own code and documentation: [MIT](LICENSE). Patches for the Linux kernel and U-Boot follow the

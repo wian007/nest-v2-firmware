@@ -53,6 +53,8 @@ button:disabled{opacity:.45;cursor:default}
 .note{font-size:13px;color:var(--dim)}
 .actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
 pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;color:var(--dim)}
+a{color:var(--info)}
+#thanks li{font-size:14px}
 [hidden]{display:none!important}
 </style>
 </head>
@@ -129,6 +131,18 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding
 
 <section><h2 data-t="log"></h2><pre id="log"></pre></section>
 </div>
+
+<section id="thanks">
+  <h2 data-t="thanks.title"></h2>
+  <ul>
+    <li><a href="https://github.com/gtvhacker/NestDFUAttack" rel="noopener">GTVHacker</a> <span data-t="thanks.gtvhacker"></span></li>
+    <li><a href="https://github.com/cuckoo-nest" rel="noopener">cuckoo-nest</a> <span data-t="thanks.cuckoo"></span></li>
+    <li><a href="https://github.com/ajb142/omap_loader" rel="noopener">Grant Hernandez, ajb142</a> <span data-t="thanks.omap"></span></li>
+    <li>Linux, U-Boot, BusyBox, Yocto <span data-t="thanks.foss"></span></li>
+  </ul>
+  <p class="note" id="images-note" hidden><span data-t="thanks.images"></span> <a href="images/NOTICE.md" data-t="thanks.images.link"></a></p>
+  <p class="note"><span data-t="thanks.note"></span> <a href="https://github.com/wian007/nest-v2-firmware/blob/main/CREDITS.md" rel="noopener" data-t="thanks.more"></a></p>
+</section>
 </main>
 <script type="module" src="js/app.js"></script>
 </body>

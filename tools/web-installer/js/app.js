@@ -302,6 +302,7 @@ $("nobrowser").hidden = usable;
 $("insecure").hidden = window.isSecureContext;
 $("windows").hidden = !/Windows/.test(navigator.userAgent);
 await loadManifest();
+$("images-note").hidden = !manifest;
 const start = () => { const ok = usable && window.isSecureContext && $("agree").checked; document.querySelectorAll("[data-mode]").forEach(b => b.disabled = !ok); };
 $("agree").onchange = start; start();
 document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => {
