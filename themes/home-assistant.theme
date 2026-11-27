@@ -1,0 +1,17 @@
+# After the default dark theme of Home Assistant: near-black background, light grey text, blue
+# accent and the orange Home Assistant uses for "heating".
+name=HOME ASSISTANT
+bg=111111
+surface=1c1c1c
+surface2=282828
+line=383838
+dim=9b9b9b
+text=e1e1e1
+strong=ffffff
+accent=03a9f4
+heat=ff8100
+ok=43a047
+error=db4437
+info=03a9f4
+font=2
+dial=18

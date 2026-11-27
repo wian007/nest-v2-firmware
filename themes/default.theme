@@ -1,0 +1,30 @@
+# The default look: dark, with an amber accent.
+# A theme is a list of key=value lines; colours are RRGGBB. Copy this file, change it, give it
+# another name ending in .theme, and choose it under Settings > Theme on the device (or with
+# theme=<name> in /var/lib/j49/ui). Themes are looked for in /var/lib/j49/themes (your own) and
+# /usr/share/j49/themes (these). Keys that are missing keep the value of this default theme.
+name=DEFAULT
+bg=0a0c10
+# panels and rows, and the row under the cursor
+surface=10131a
+surface2=171b24
+# thin lines and empty tracks
+line=2a3040
+# text: weak, normal, strong
+dim=6b7488
+text=d6dae3
+strong=f0f2f6
+# the accent: titles, the cursor, the dial when it is not heating
+accent=f0b429
+# the dial and the status line while heating
+heat=ff8a3d
+ok=45c16b
+error=e5484d
+# the room temperature
+info=3dbdc9
+# the large word on the start screen (8 characters at most)
+splash=J49
+# the look of large digits: 0 blocks, 1 dots, 2 smoothed, 3 seven-segment, 4 thin strokes
+font=2
+# thickness of the dial in pixels
+dial=14

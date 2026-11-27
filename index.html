@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>J49 installer</title>
+<style>
+:root{--bg:#0a0c10;--surface:#10131a;--surface2:#171b24;--line:#2a3040;--dim:#6b7488;--text:#d6dae3;--strong:#f0f2f6;--accent:#f0b429;--heat:#ff8a3d;--ok:#45c16b;--error:#e5484d;--info:#3dbdc9;--on-accent:#16130a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:680px;margin:0 auto;padding:24px 16px 64px}
+header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
+h1{font-size:20px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0;font-weight:600}
+header p{margin:4px 0 0;color:var(--dim);font-size:14px}
+.pick{display:flex;gap:8px}
+h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 12px;font-weight:600}
+section{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
+section.active{border-color:var(--accent)}
+section.done h2::after{content:" \2713";color:var(--ok)}
+section.later{opacity:.45}
+section.later .body{display:none}
+ol,ul{margin:0 0 12px;padding-left:22px}
+li{margin:4px 0}
+p{margin:0 0 12px}
+button,select,.file{font:inherit;color:var(--text);background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;min-height:44px}
+button{cursor:pointer}
+button:hover:not(:disabled){border-color:var(--dim)}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--on-accent);font-weight:600}
+button.link{background:none;border:none;color:var(--dim);padding:4px 0;min-height:0;text-decoration:underline}
+button:disabled{opacity:.45;cursor:default}
+.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px}
+.modes button{text-align:left;padding:14px}
+.modes button.on{border-color:var(--accent)}
+.modes b{display:block;color:var(--strong)}
+.modes span{font-size:13px;color:var(--dim)}
+.warn{border-color:var(--heat)}
+.warn li{color:var(--strong)}
+.check{display:flex;gap:10px;align-items:flex-start;margin-top:10px;color:var(--strong)}
+.check input{width:20px;height:20px;margin-top:2px;flex:none}
+.frow{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:14px}
+.frow:first-of-type{border-top:none}
+.frow input{font:inherit;color:var(--dim);max-width:240px}
+.frow .st{grid-column:1/-1;font-size:13px;color:var(--dim);overflow-wrap:anywhere}
+.st.ok{color:var(--ok)}.st.bad{color:var(--error)}
+.bar{height:8px;background:var(--line);border-radius:4px;overflow:hidden;margin:12px 0 6px}
+.bar i{display:block;height:100%;width:0;background:var(--info);transition:width .2s}
+.state{font-size:14px;color:var(--dim);min-height:21px;overflow-wrap:anywhere}
+.state.ok{color:var(--ok)}.state.bad{color:var(--error)}
+.note{font-size:13px;color:var(--dim)}
+.actions{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;max-height:220px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;margin:0;color:var(--dim)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <div><h1 data-t="title">J49 installer</h1><p data-t="subtitle"></p></div>
+  <div class="pick">
+    <select id="lang" aria-label="Language"></select>
+    <select id="theme" aria-label="Theme"></select>
+  </div>
+</header>
+
+<section class="warn" id="nobrowser" hidden><p data-t="nobrowser"></p></section>
+<section class="warn" id="insecure" hidden><p data-t="insecure"></p></section>
+
+<section class="warn" id="s-warn">
+  <h2 data-t="warn.title"></h2>
+  <ul><li data-t="warn.1"></li><li data-t="warn.2"></li><li data-t="warn.3"></li><li data-t="warn.4"></li></ul>
+  <p class="note" id="windows" data-t="windows" hidden></p>
+  <label class="check"><input type="checkbox" id="agree"><span data-t="warn.agree"></span></label>
+</section>
+
+<section id="s-mode">
+  <h2 data-t="mode.title"></h2>
+  <div class="modes">
+    <button data-mode="install"><b data-t="mode.install"></b><span data-t="mode.install.d"></span></button>
+    <button data-mode="backup"><b data-t="mode.backup"></b><span data-t="mode.backup.d"></span></button>
+    <button data-mode="restore"><b data-t="mode.restore"></b><span data-t="mode.restore.d"></span></button>
+  </div>
+</section>
+
+<div id="steps" hidden>
+<section id="s-files"><h2 data-t="files.title"></h2><div class="body">
+  <p id="files-how" class="note"></p>
+  <div id="files"></div>
+  <div class="state" id="files-state"></div>
+</div></section>
+
+<section id="s-rom"><h2 data-t="rom.title"></h2><div class="body">
+  <ol><li data-t="rom.1"></li><li data-t="rom.2"></li><li data-t="rom.3"></li><li data-t="rom.4"></li></ol>
+  <div class="actions"><button class="primary" id="rom-go" data-t="rom.button"></button></div>
+  <div class="bar"><i id="rom-bar"></i></div><div class="state" id="rom-state"></div>
+</div></section>
+
+<section id="s-svc"><h2 data-t="svc.title"></h2><div class="body">
+  <p data-t="svc.1"></p>
+  <div class="actions"><button class="primary" id="svc-go" data-t="svc.button"></button></div>
+  <div class="state" id="svc-state"></div>
+</div></section>
+
+<section id="s-backup"><h2 data-t="backup.title"></h2><div class="body">
+  <p data-t="backup.1"></p>
+  <div class="actions"><button class="primary" id="backup-go" data-t="backup.button"></button><button class="link" id="backup-skip" data-t="backup.skip"></button></div>
+  <div class="bar"><i id="backup-bar"></i></div><div class="state" id="backup-state"></div>
+</div></section>
+
+<section id="s-uboot"><h2 data-t="uboot.title"></h2><div class="body">
+  <p data-t="uboot.1"></p>
+  <div class="actions"><button class="primary" id="uboot-go" data-t="uboot.button"></button></div>
+  <div class="bar"><i id="uboot-bar"></i></div><div class="state" id="uboot-state"></div>
+</div></section>
+
+<section id="s-dfu"><h2 data-t="dfu.title"></h2><div class="body">
+  <p data-t="dfu.1"></p>
+  <div class="actions"><button class="primary" id="dfu-go" data-t="dfu.button"></button><button class="link" id="dfu-again" data-t="dfu.reconnect" hidden></button></div>
+  <div class="bar"><i id="dfu-bar"></i></div><div class="state" id="dfu-state"></div>
+</div></section>
+
+<section id="s-restore"><h2 data-t="restore.title"></h2><div class="body">
+  <p data-t="restore.1"></p>
+  <div class="actions"><button class="primary" id="restore-go" data-t="restore.button"></button></div>
+  <div class="bar"><i id="restore-bar"></i></div><div class="state" id="restore-state"></div>
+</div></section>
+
+<section id="s-done"><h2 data-t="done.title"></h2><div class="body"><p id="done-text"></p></div></section>
+
+<section><h2 data-t="log"></h2><pre id="log"></pre></section>
+</div>
+</main>
+<script type="module" src="js/app.js"></script>
+</body>
+</html>
