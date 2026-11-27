@@ -23,7 +23,9 @@ function reader(dev, ep) {
   return async (length, ms) => {
     if (!pending) pending = dev.transferIn(ep, length);
     const timeout = Symbol("timeout");
-    const r = await Promise.race([pending, sleep(ms).then(() => timeout)]);
+    let r;
+    try { r = await Promise.race([pending, sleep(ms).then(() => timeout)]); }
+    catch (e) { pending = null; throw e; }       // a failed read is over: the next call reads again
     if (r === timeout) return null;
     pending = null;
     if (r.status !== "ok") throw new Error("USB read: " + r.status);
@@ -60,6 +62,8 @@ export async function romBoot(dev, files, jump, { log = () => {}, progress = () 
   if (!id) { const e = new Error("the boot ROM does not answer"); e.code = "stale"; throw e; }
   if (id.length !== ASIC_ID_LEN) throw new Error("unexpected answer from the boot ROM (" + id.length + " bytes)");
   log("boot ROM: " + Array.from(id.subarray(1, 8), b => b.toString(16).padStart(2, "0")).join(""));
+  // the processor of the 2nd generation thermostat is an OMAP3630: the ROM says "36 30"
+  if (id[4] !== 0x36 || id[5] !== 0x30) { const e = new Error("this is not an OMAP3630"); e.code = "wrongdevice"; throw e; }
 
   const first = files[0];
   await send(dev, 1, le32(PERIPH_BOOT));
@@ -67,11 +71,19 @@ export async function romBoot(dev, files, jump, { log = () => {}, progress = () 
   await send(dev, 1, first.data, count(first.name));
   log(first.name + " sent to the ROM");
 
-  // the loader now runs and asks for the other files, one at a time
+  // The loader now starts and asks for the other files, one at a time. While it starts, a
+  // read can fail (it sets up USB again): wait and read again, as omap_loader does.
+  await sleep(20);
   let cur = 1, misses = 0;
   while (cur < files.length) {
     const f = files[cur];
-    const msg = await read(512, 3000);
+    let msg = null;
+    try { msg = await read(512, 3000); }
+    catch (e) {
+      log("no answer from the loader yet (" + (e && e.message || e) + ")");
+      try { await dev.clearHalt("in", 1); } catch (e2) { /* nothing to clear */ }
+      await sleep(2000);
+    }
     if (!msg) {
       if (++misses >= 5) throw new Error("the loader does not answer");
       continue;

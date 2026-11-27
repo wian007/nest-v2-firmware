@@ -8,11 +8,15 @@ const cat = (...a) => { const b = new Uint8Array(a.reduce((n, x) => n + x.length
 
 /** The OMAP boot ROM and the x-loader behind it, as tools/omap-loader talks to them. */
 export class MockRom {
-  constructor() { this.state = "rom"; this.inq = [new Uint8Array(69).fill(7)]; this.waiters = []; this.buf = new Uint8Array(0); this.loaded = []; this.jump = null; this.configuration = null; this.want = 0; }
+  constructor() { this.state = "rom"; this.inq = [Uint8Array.from({ length: 69 }, (_, i) => [1, 5, 1, 5, 0x36, 0x30, 7, 7][i] || 0)]; this.waiters = []; this.buf = new Uint8Array(0); this.loaded = []; this.jump = null; this.configuration = null; this.want = 0; }
   async open() {} async close() {} async claimInterface() {}
   async selectConfiguration() { this.configuration = {}; }
   push(b) { const w = this.waiters.shift(); if (w) w(ok(b)); else this.inq.push(b); }
-  transferIn() { const b = this.inq.shift(); return b ? Promise.resolve(ok(b)) : new Promise(r => this.waiters.push(r)); }
+  async clearHalt() {}
+  transferIn() {
+    // the loader is not ready at once: its first read fails, as on the real device
+    if (this.state === "ask" && !this.failedOnce) { this.failedOnce = true; return Promise.reject(new Error("A transfer error has occurred.")); }
+    const b = this.inq.shift(); return b ? Promise.resolve(ok(b)) : new Promise(r => this.waiters.push(r)); }
   async transferOut(ep, data) {
     if (data.length > 512) throw new Error("more than 512 bytes in one transfer");
     this.buf = cat(this.buf, data);

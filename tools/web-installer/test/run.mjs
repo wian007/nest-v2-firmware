@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { randomBytes } from "node:crypto";
 import { romBoot } from "../js/omap.js";
 import { Dfu } from "../js/dfu.js";
-import { Service, ByteReader, readBackup, verifyBackup, crc32, NEVER_WRITTEN } from "../js/service.js";
+import { Service, ByteReader, readBackup, verifyBackup, crc32, notAJ49, J49_LAYOUT, NEVER_WRITTEN } from "../js/service.js";
 import { MockRom, MockDfu, nandio } from "./mock.mjs";
 
 const rnd = n => new Uint8Array(randomBytes(n));
@@ -15,6 +15,18 @@ const ERASE = 0x20000;
 
 // --- crc32 is the usual one
 assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
+
+// --- is it a J49: the layout must match exactly, the model must not say otherwise
+{
+  const good = [{ name: "nand0", size: 0x10000000, erasesize: 0x20000 }, ...J49_LAYOUT.map(([name, size]) => ({ name, size, erasesize: 0x20000 }))];
+  assert.equal(notAJ49(good, { model: "Display-2.14" }), null);
+  assert.equal(notAJ49(good, { model: "-" }), null);
+  assert.match(notAJ49(good, { model: "Display-1.9" }), /Display-1.9/);
+  assert.match(notAJ49(good.slice(0, 9), {}), /partitions/);
+  const other = good.map(p => ({ ...p })); other[6].size = 0x2000000;
+  assert.match(notAJ49(other, {}), /boot0/);
+  console.log("ok  device check");
+}
 
 // --- the ROM push: three files, the loader's messages, the jump
 {
@@ -65,6 +77,7 @@ assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
   writeFileSync(join(dir, "mtd"), mtd); writeFileSync(join(dir, "nand0"), Buffer.alloc(total, 0xff));
   const dev = nandio(exe, dir);
   const svc = new Service(new ByteReader(dev.pull), dev.write);
+  await svc.start();
   const parts = await svc.info();
   assert.deepEqual(parts.map(p => p.name), ["nand0", "ipl", "spl0", "spl1", "root0"]);
 

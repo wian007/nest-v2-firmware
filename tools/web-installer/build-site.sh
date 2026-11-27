@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Put the installer page together as a static site: the page, its texts, the themes of the
-# thermostat (tools/themes) and, with --images, the image files with a manifest of checksums.
+# Put the installer page together as a static site: the page, its texts and, with --images, the image files with a manifest of checksums.
 #
 # Usage: build-site.sh <output directory> [--images]
 #
@@ -17,11 +16,10 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${1:?usage: build-site.sh <output directory> [--images]}"
-mkdir -p "$OUT/js" "$OUT/lang" "$OUT/themes"
+mkdir -p "$OUT/js" "$OUT/lang"
 cp "$HERE/index.html" "$OUT/"
 cp "$HERE"/js/*.js "$OUT/js/"
 cp "$HERE"/lang/*.txt "$OUT/lang/"
-cp "$HERE"/../themes/*.theme "$OUT/themes/"
 if [ "${2:-}" = "--images" ]; then
     D="$HERE/../dfu-install"
     ROOTFS="${J49_ROOTFS:-$(ls -1t "$HERE"/../../build/tmp/deploy/images/nest-j49/*.rootfs.jffs2 2>/dev/null | head -n 1)}"

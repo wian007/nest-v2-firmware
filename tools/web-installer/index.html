@@ -12,7 +12,10 @@ main{max-width:680px;margin:0 auto;padding:24px 16px 64px}
 header{display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end;justify-content:space-between;margin-bottom:20px}
 h1{font-size:20px;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);margin:0;font-weight:600}
 header p{margin:4px 0 0;color:var(--dim);font-size:14px}
-.pick{display:flex;gap:8px}
+.flags{display:flex;gap:8px}
+.flags button{padding:4px;min-height:0;line-height:0;border-radius:6px;background:none}
+.flags button[aria-pressed=true]{border-color:var(--accent)}
+.flags svg{width:36px;height:24px;border-radius:3px;display:block}
 h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin:0 0 12px;font-weight:600}
 section{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:18px;margin-bottom:14px}
 section.active{border-color:var(--accent)}
@@ -57,10 +60,7 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding
 <main>
 <header>
   <div><h1 data-t="title">J49 installer</h1><p data-t="subtitle"></p></div>
-  <div class="pick">
-    <select id="lang" aria-label="Language"></select>
-    <select id="theme" aria-label="Theme"></select>
-  </div>
+  <div class="flags" id="flags" role="group" aria-label="Language"></div>
 </header>
 
 <section class="warn" id="nobrowser" hidden><p data-t="nobrowser"></p></section>
