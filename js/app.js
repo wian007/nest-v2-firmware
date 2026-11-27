@@ -2,11 +2,15 @@
 // boot ROM), service.js (backup, boot loader, restore) and dfu.js (the system).
 import { romBoot, ROM_FILTER } from "./omap.js";
 import { Dfu, DFU_FILTER } from "./dfu.js";
-import { Service, ByteReader, readBackup, verifyBackup, NEVER_WRITTEN } from "./service.js";
+import { Service, ByteReader, readBackup, verifyBackup, notAJ49, NEVER_WRITTEN } from "./service.js";
 
 const $ = id => document.getElementById(id);
-const LANGS = ["en", "nl"];
-const THEMES = ["default", "home-assistant", "home-assistant-light", "light"];
+// The languages, each with its flag as a small drawing (flag emoji do not show on Windows).
+// To add one: a file lang/<code>.txt and an entry here.
+const LANGS = {
+  en: '<svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#012169"/><path d="M0 0L60 40M60 0L0 40" stroke="#fff" stroke-width="8"/><path d="M0 0L60 40M60 0L0 40" stroke="#c8102e" stroke-width="3"/><path d="M30 0V40M0 20H60" stroke="#fff" stroke-width="12"/><path d="M30 0V40M0 20H60" stroke="#c8102e" stroke-width="7"/></svg>',
+  nl: '<svg viewBox="0 0 60 40"><rect width="60" height="40" fill="#fff"/><rect width="60" height="13.4" fill="#ae1c28"/><rect y="26.6" width="60" height="13.4" fill="#21468b"/></svg>',
+};
 // The USB serial gadget of the rescue kernel (Linux g_serial).
 const SERIAL_FILTER = { usbVendorId: 0x0525, usbProductId: 0xa4a7 };
 // Where the loaders go in RAM (tools/dfu-install/session1-stock.sh).
@@ -31,7 +35,7 @@ const STEPS = {
 
 let texts = {}, fallback = {}, mode = null, step = 0, manifest = null;
 const files = {};        // role -> {name, data: Uint8Array | file: File, sum}
-let service = null, port = null;
+let service = null, port = null, serialIo = null;
 
 // ---------- texts and theme ----------
 const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } } };
@@ -39,30 +43,15 @@ const parse = text => Object.fromEntries(text.split("\n").filter(l => l && !l.st
 const T = (k, vars) => { let s = texts[k] || fallback[k] || k; for (const [n, v] of Object.entries(vars || {})) s = s.replace("{" + n + "}", v); return s; };
 async function getText(url) { const r = await fetch(url); if (!r.ok) throw new Error(url + ": " + r.status); return r.text(); }
 async function setLang(code) {
-  if (!LANGS.includes(code)) code = "en";
+  if (!(code in LANGS)) code = "en";
   try { texts = parse(await getText("lang/" + code + ".txt")); } catch (e) { texts = {}; code = "en"; }
-  store.set("j49.lang", code); document.documentElement.lang = code; $("lang").value = code;
+  store.set("j49.lang", code); document.documentElement.lang = code;
+  document.querySelectorAll("#flags button").forEach(b => b.setAttribute("aria-pressed", b.dataset.lang === code));
   document.title = T("title");
   document.querySelectorAll("[data-t]").forEach(e => e.textContent = T(e.dataset.t));
-  $("lang").setAttribute("aria-label", T("language")); $("theme").setAttribute("aria-label", T("theme"));
+  $("flags").setAttribute("aria-label", T("language"));
   if (mode) paintFiles();
 }
-// The same theme files as the thermostat (tools/themes): key=RRGGBB lines.
-async function setTheme(name) {
-  if (!THEMES.includes(name)) name = "default";
-  let t = {};
-  try { t = { ...parse(await getText("themes/default.theme")), ...parse(await getText("themes/" + name + ".theme")) }; } catch (e) { /* keep the built-in colours */ }
-  const root = document.documentElement.style;
-  for (const k of ["bg", "surface", "surface2", "line", "dim", "text", "strong", "accent", "heat", "ok", "error", "info"]) {
-    if (/^[0-9a-f]{6}$/i.test(t[k] || "")) root.setProperty("--" + k, "#" + t[k]);
-  }
-  const a = /^[0-9a-f]{6}$/i.test(t.accent || "") ? t.accent : "f0b429";
-  const lum = (parseInt(a.slice(0, 2), 16) * 299 + parseInt(a.slice(2, 4), 16) * 587 + parseInt(a.slice(4, 6), 16) * 114) / 1000;
-  root.setProperty("--on-accent", lum > 140 ? "#16130a" : "#ffffff");
-  if (/^[\w ,"'-]+$/.test(t.web_font || "")) root.setProperty("--font", t.web_font); else root.removeProperty("--font");
-  store.set("j49.theme", name); $("theme").value = name;
-}
-
 // ---------- small helpers ----------
 function log(line) { const p = $("log"); p.textContent += line + "\n"; p.scrollTop = p.scrollHeight; }
 function state(id, text, kind) { const e = $(id + "-state"); e.textContent = text; e.className = "state " + (kind || ""); }
@@ -163,13 +152,26 @@ async function runRom() {
 // ---------- step 3: the service ----------
 async function runService() {
   state("svc", "");
+  // a port left open by an earlier try of this step is closed first
+  if (port) { try { await serialIo.rd.cancel(); serialIo.rd.releaseLock(); serialIo.wr.releaseLock(); await port.close(); } catch (e) { /* it was not open */ } port = null; }
   port = await navigator.serial.requestPort({ filters: [SERIAL_FILTER] });
   await port.open({ baudRate: 115200, bufferSize: 1 << 20 });
   const rd = port.readable.getReader(), wr = port.writable.getWriter();
+  serialIo = { rd, wr };
   const reader = new ByteReader(async () => { const { value, done } = await rd.read(); return done ? null : value; });
   service = new Service(reader, d => wr.write(d), log);
   state("svc", T("svc.waiting"));
+  // count what comes in, so a silent line and a line that only repeats itself can be told apart
+  let got = 0; const pull0 = reader.pull;
+  reader.pull = async () => { const v = await pull0(); if (v) { got += v.length; state("svc", T("svc.waiting") + " (" + got + " bytes)"); } return v; };
+  await service.start();
   const parts = await service.info();
+  // Is it the thermostat this installer is for? Nothing is read or written before this.
+  const ident = await service.ident();
+  log("the board says: model " + ident.model + ", hardware " + ident.hardware + ", revision " + ident.revision);
+  const why = notAJ49(parts, ident);
+  if (why) { log("not a J49: " + why); service = null; const e = new Error(why); e.code = "wrongdevice"; throw e; }
+  await service.show(T("panel.connected"), 0, 0, "");
   const chip = parts.filter(p => p.name !== "nand0").reduce((n, p) => n + p.size, 0);
   log("partitions: " + parts.map(p => p.name).join(" "));
   state("svc", T("svc.found", { n: parts.filter(p => p.name !== "nand0").length, mb: mb(chip) }), "ok");
@@ -190,7 +192,8 @@ async function runBackup() {
     close = async () => { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob(pieces)); a.download = name; a.click(); };
     fileBack = async () => new Blob(pieces);
   }
-  const summary = await service.backup(sink, (d, t, n) => { bar("backup", d, t); state("backup", T("backup.reading", { name: n })); }, { date: new Date().toISOString() });
+  const summary = await service.backup(sink, (d, t, n) => { bar("backup", d, t); state("backup", T("backup.reading", { name: n })); }, { date: new Date().toISOString() }, T("panel.backup"));
+  await service.show(T("panel.backup"), 100, 0, T("panel.checking"));
   await close();
   state("backup", T("backup.verify"));
   const file = await fileBack(), stream = file.stream().getReader();
@@ -198,6 +201,7 @@ async function runBackup() {
   const errors = summary.reduce((n, p) => n + p.X, 0);
   state("backup", T("backup.done", { mb: mb(file.size) }) + (errors ? " " + T("backup.errors", { n: errors }) : ""), errors ? "bad" : "ok");
   log("backup: " + file.size + " bytes, " + errors + " blocks with read errors");
+  await service.show(errors ? "ERROR" : "DONE", 100, 0, T("panel.backup"));
   if (mode === "backup") { await service.reboot(); }
   next();
 }
@@ -206,9 +210,11 @@ async function runBackup() {
 async function runUboot() {
   for (const name of ["spl0", "spl1"]) {
     state("uboot", T("uboot.writing", { name }));
+    await service.show(T("panel.bootloader"), name === "spl1" ? 50 : 0, 50, name);
     await service.writeImage(name, files.uboot.data, (d, t) => bar("uboot", (name === "spl1" ? t : 0) + d, 2 * t));
     log(name + " written and read back");
   }
+  await service.show("DONE", 100, 0, T("panel.bootloader"));
   await service.reboot();
   try { await port.close(); } catch (e) { /* gone */ }
   state("uboot", T("uboot.done"), "ok");
@@ -266,10 +272,12 @@ async function runRestore() {
   for await (const p of readBackup(open())) {
     if (!p.name || NEVER_WRITTEN.includes(p.name)) continue;
     state("restore", T("restore.writing", { name: p.name }));
+    await service.show(T("panel.restore"), done * 100 / total, (done + p.size) * 100 / total - Math.floor(done * 100 / total), p.name);
     const r = await service.writeFrames(p.name, p.frames, "exact", (d, t) => bar("restore", done + p.size * d / t, total));
     done += p.size;
     log(p.name + " written back" + (r.skipped ? " (" + r.skipped + " bad blocks left out)" : ""));
   }
+  await service.show("DONE", 100, 0, T("panel.restore"));
   await service.reboot();
   try { await port.close(); } catch (e) { /* gone */ }
   state("restore", T("restore.done"), "ok");
@@ -277,14 +285,17 @@ async function runRestore() {
 }
 
 // ---------- start ----------
-for (const [id, list] of [["lang", LANGS], ["theme", THEMES]]) for (const v of list) { const o = document.createElement("option"); o.value = v; o.textContent = v; $(id).appendChild(o); }
-$("lang").onchange = () => setLang($("lang").value);
-$("theme").onchange = () => setTheme($("theme").value);
+for (const [code, flag] of Object.entries(LANGS)) {
+  const b = document.createElement("button");
+  b.dataset.lang = code; b.innerHTML = flag; b.onclick = () => setLang(code);
+  $("flags").appendChild(b);
+}
 try { fallback = parse(await getText("lang/en.txt")); } catch (e) { fallback = {}; }
 await setLang(store.get("j49.lang") || ((navigator.language || "en").slice(0, 2)));
-await setTheme(store.get("j49.theme") || "default");
-for (const code of LANGS) { try { const t = parse(await getText("lang/" + code + ".txt")); [...$("lang").options].find(o => o.value === code).textContent = t["lang.name"] || code; } catch (e) { /* keep the code */ } }
-for (const o of $("theme").options) o.textContent = o.value.replace(/(^|-)([a-z])/g, (m, a, b) => (a ? " " : "") + b.toUpperCase());
+// the name of each language, in that language, for screen readers and as a tooltip
+for (const b of document.querySelectorAll("#flags button")) {
+  try { const t = parse(await getText("lang/" + b.dataset.lang + ".txt")); b.title = t["lang.name"] || b.dataset.lang; b.setAttribute("aria-label", b.title); } catch (e) { b.title = b.dataset.lang; }
+}
 
 const usable = !!(navigator.usb && navigator.serial);
 $("nobrowser").hidden = usable;

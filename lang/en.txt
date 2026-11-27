@@ -4,7 +4,6 @@ lang.name=English
 title=J49 installer
 subtitle=Our own software on a Nest Learning Thermostat (2nd generation), from the browser
 language=Language
-theme=Theme
 
 nobrowser=This browser cannot reach USB devices. Use Chrome or Edge on a computer (Windows, Linux, macOS or ChromeOS).
 insecure=The page must be opened over https or from localhost; otherwise the browser does not allow USB.
@@ -48,10 +47,10 @@ rom.3=Hold the ring pressed for 10 to 15 seconds, until the screen goes dark and
 rom.4=When "OMAP3630" appears in the list, select it and click "Connect" there. You can let go of the ring.
 rom.button=Connect
 rom.sending=Sending the loaders
-rom.done=The thermostat starts the service kernel. Its screen shows text; this takes about 20 seconds.
+rom.done=The thermostat starts the service kernel. Its screen shows text.
 
 svc.title=3. Connect to the service
-svc.1=The thermostat is now a USB serial port. Click the button and choose "Gadget Serial" in the list.
+svc.1=Click "Connect to the service". A list opens; leave it open. A few seconds after the start "Gadget Serial" appears in it: select it and click "Connect" there.
 svc.button=Connect to the service
 svc.waiting=Waiting for the service to answer
 svc.found=Connected. The thermostat has {n} partitions, {mb} MB.
@@ -93,8 +92,15 @@ done.install=The thermostat now runs the J49 software. Heating is off until you 
 done.backup=The backup is made. Nothing on the thermostat was changed. Take it off USB and hold the ring 10 seconds to restart it.
 done.restore=The thermostat is back on the stock firmware.
 
+# on the panel of the thermostat: capitals, digits and a few signs only
+panel.connected=CONNECTED
+panel.backup=BACKUP
+panel.checking=CHECKING
+panel.bootloader=BOOT LOADER
+panel.restore=RESTORE
 log=Log
 error.stale=The thermostat is in its boot mode but does not answer. Take it off USB, hold the ring pressed for 10 seconds so it switches off fully, connect it again and repeat this step. If it keeps happening, the battery may be empty: leave it on USB for half an hour first.
+error.wrongdevice=This is not a Nest Learning Thermostat of the 2nd generation (board J49). The installer stops here; nothing was changed. The log says what it found.
 error=It went wrong
 again=Try this step again
 cancelled=Nothing was chosen.
