@@ -158,7 +158,9 @@ licences of those projects (GPL-2.0). See the [disclaimer](DISCLAIMER.md).
 ## Good to know
 
 - No secrets are in this repository. WiFi and broker credentials live on the device only.
-- The full backup of the stock firmware is kept outside git, and so are the loader images of the
-  USB boot chain ([where they come from](tools/dfu-install/nest-dfu/README.md)) and built images.
+- The full backup of the stock firmware is kept outside git. The five images the installer uses
+  are in the repository as they were in the last release: the two loaders of the USB boot chain,
+  the service kernel, our kernel and our U-Boot
+  ([who made them, licences, sources](tools/web-installer/images-notice.md)).
 - This is a hobby project on one model of thermostat. It switches real heating: read
   [docs/backplate-heatlink-flow.md](docs/backplate-heatlink-flow.md) before trusting it with yours.

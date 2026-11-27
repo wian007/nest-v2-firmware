@@ -151,9 +151,21 @@ button.danger{border-color:var(--red);color:var(--red)}
     <div class="step"><button data-min="min_on,-10" aria-label="shorter" data-ta="aria.shorter">−</button><span class="mono" id="d-mon"></span><button data-min="min_on,10" aria-label="longer" data-ta="aria.longer">+</button></div></div>
   <div class="row"><div class="what"><span data-t="sleep">Sleep</span><small id="d-sleep-n"></small></div>
     <div class="seg"><button id="sl-off" data-t="off">Off</button><button id="sl-on" data-t="on">On</button></div></div>
-  <div class="row" id="upd-row" hidden><div class="what"><span data-t="upd">Updates</span><small id="d-upd-n"></small></div>
+  <h3 data-t="upd">Updates over the network</h3>
+  <p style="margin:0 0 8px" id="u-now"></p>
+  <div class="row"><div class="what"><span data-t="upd.auto">Look for a new version every day</span><small id="d-upd-n"></small></div>
     <div class="seg"><button id="up-off" data-t="off">Off</button><button id="up-on" data-t="on">On</button></div></div>
-  <div class="actions" id="upd-actions" hidden><button id="up-check" data-t="upd.check">Look for a new version</button><button id="up-install" data-t="upd.install" hidden>Install</button></div>
+  <div class="row"><div class="what"><span data-t="upd.pre">Also offer test versions</span><small data-t="upd.pre.help">Pre-releases: newer, less tried.</small></div>
+    <div class="seg"><button id="upp-off" data-t="off">Off</button><button id="upp-on" data-t="on">On</button></div></div>
+  <div class="actions"><button id="up-check" data-t="upd.check">Show the versions there are</button></div>
+  <div id="u-list"></div>
+  <p style="margin:12px 0 4px"><b data-t="upd.repos">Where versions come from</b> <small id="u-repos-n"></small></p>
+  <div id="u-repos"></div>
+  <div class="row" id="u-std-row" hidden><div class="what"><span data-t="upd.std">Also use the standard repository</span></div>
+    <div class="seg"><button id="us-off" data-t="off">Off</button><button id="us-on" data-t="on">On</button></div></div>
+  <div class="row"><input id="u-url" placeholder="https://host/owner/repository" style="flex:1;min-width:0" aria-label="repository" data-ta="upd.repo.url">
+    <input id="u-token" placeholder="token" style="width:90px" aria-label="token" data-ta="upd.repo.token">
+    <button id="u-add" style="width:auto;padding:0 12px" data-t="add">Add</button></div>
   <div class="row" id="ring-row" hidden><div class="what"><span data-t="ringrev">Ring counts per menu turn</span><small id="d-ring-n"></small></div>
     <div class="step"><input id="d-ring" inputmode="numeric" style="width:90px" aria-label="ring counts" data-ta="aria.ringrev"><button id="d-ring-save" style="width:auto;font-size:inherit;padding:0 12px" data-t="set">Set</button></div></div>
 
@@ -402,11 +414,23 @@ $("w-add").onclick = async () => {
 };
 $("up-off").onclick = () => dev("update_check=off");
 $("up-on").onclick = () => dev("update_check=on");
-$("up-check").onclick = async () => { try { await api("POST", "/api/update-check", ""); say(T("upd.looking"), "ok"); } catch (e) { say(e.message, "err"); } };
-$("up-install").onclick = async () => {
-  if (!confirm(T("upd.ask"))) return;
-  try { await api("POST", "/api/update-install", ""); say(T("upd.started"), "ok"); } catch (e) { say(e.message, "err"); }
+$("us-off").onclick = () => dev("update_std=off");
+$("us-on").onclick = () => dev("update_std=on");
+$("upp-off").onclick = () => dev("update_pre=off");
+$("upp-on").onclick = () => dev("update_pre=on");
+$("up-check").onclick = async () => {
+  say(T("upd.looking"), "ok");
+  try { st = await api("POST", "/api/update-list", ""); paint(); } catch (e) { say(e.message, "err"); }
 };
+async function updRepo(what, url, token) {
+  try { st = await api("POST", "/api/update-repo", "do=" + what + "\nurl=" + (url || "") + "\ntoken=" + (token || "")); paint(); } catch (e) { say(e.message, "err"); }
+}
+$("u-add").onclick = () => { const u = $("u-url").value.trim(); if (u) { updRepo("add", u, $("u-token").value.trim()); $("u-url").value = $("u-token").value = ""; } };
+async function updInstall(tag, repo) {
+  if (!confirm(T("upd.ask").replace("{v}", tag + " (" + repo.replace("https://", "") + ")"))) return;
+  try { await api("POST", "/api/update-install", "version=" + tag + "\nrepo=" + repo); say(T("upd.started"), "ok"); } catch (e) { say(e.message, "err"); }
+}
+function el(tag, text, cls) { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; }
 $("restart").onclick = async () => {
   if (!confirm(T("restart.ask"))) return;
   try { await api("POST", "/api/restart", ""); say(T("restart.done"), "ok"); } catch (e) { say(e.message, "err"); }
@@ -422,15 +446,33 @@ function paintDevice() {
   $("d-kind-n").textContent = T("kind.help");
   // only a screen with a carousel uses the ring counts per turn
   $("ring-row").hidden = !(d.caps || "").split(" ").includes("carousel");
-  // updates: only shown when an address is set on the device
-  const hasUpd = !!d.upd_url;
-  $("upd-row").hidden = $("upd-actions").hidden = !hasUpd;
-  if (hasUpd) {
-    $("up-off").classList.toggle("on", d.upd_check !== "on"); $("up-on").classList.toggle("on", d.upd_check === "on");
-    const newer = d.upd_latest && d.upd_latest !== d.commit_date && d.upd_latest !== d.version;
-    $("up-install").hidden = !newer || !!d.upd_busy;
-    $("d-upd-n").textContent = d.upd_busy ? T("upd.busy") + " (" + d.upd_busy + ")" : d.upd_error ? T("upd.error") + ": " + d.upd_error :
-      newer ? T("upd.newer") + ": " + d.upd_latest : d.upd_latest ? T("upd.current") : (d.upd_check === "on" ? T("upd.daily") : T("upd.manual"));
+  // updates
+  $("u-now").textContent = T("upd.now") + ": " + (d.upd_version || T("upd.norelease")) + (d.upd_from ? " (" + d.upd_from.replace("https://", "") + ")" : "") + " · " + (d.commit || "").slice(0, 8) + " · " + (d.commit_date || "");
+  $("up-off").classList.toggle("on", d.upd_check !== "on"); $("up-on").classList.toggle("on", d.upd_check === "on");
+  $("upp-off").classList.toggle("on", d.upd_pre !== "on"); $("upp-on").classList.toggle("on", d.upd_pre === "on");
+  $("d-upd-n").textContent = d.upd_busy ? T("upd.busy") + " (" + d.upd_busy + ")" : d.upd_error ? T("upd.error") + ": " + d.upd_error :
+    d.upd_newer === "yes" ? T("upd.newer") + ": " + d.upd_latest : (d.upd_check === "on" ? T("upd.daily") : T("upd.manual"));
+  const ul = $("u-list"); ul.textContent = "";
+  for (const v of d.upd_versions || []) {
+    const row = el("div", null, "row"), what = el("div", null, "what");
+    const runs = v.tag === d.upd_version && (!d.upd_from || d.upd_from === v.repo);
+    const mine = (d.upd_repos || []).some(r => r.own && r.url === v.repo);
+    what.append(el("span", v.tag + (runs ? " (" + T("upd.runs") + ")" : "")), el("small", (mine ? T("upd.src.own") : T("upd.src.std")) + ": " + v.repo.replace("https://", "") + " · " + v.date.slice(0, 16).replace("T", " ") + (v.pre ? " · " + T("upd.test") : "")));
+    row.append(what);
+    if (v.ok && !runs && !d.upd_busy) { const b = el("button", T("upd.install")); b.style.cssText = "width:auto;padding:0 12px"; b.onclick = () => updInstall(v.tag, v.repo); row.append(b); }
+    else if (!v.ok) row.append(el("small", T("upd.noimage")));
+    ul.append(row);
+  }
+  const ur = $("u-repos"); ur.textContent = "";
+  $("u-repos-n").textContent = "";
+  $("u-std-row").hidden = !(d.upd_repos || []).some(r => r.own);
+  $("us-off").classList.toggle("on", d.upd_std === "off"); $("us-on").classList.toggle("on", d.upd_std !== "off");
+  for (const r of d.upd_repos || []) {
+    const row = el("div", null, "row"), what = el("div", null, "what");
+    what.append(el("span", r.url.replace("https://", "")), el("small", r.own ? T("upd.src.own") : T("upd.src.std")));
+    row.append(what);
+    if (r.own) { const b = el("button", T("remove")); b.style.cssText = "width:auto;padding:0 12px"; b.onclick = () => updRepo("remove", r.url); row.append(b); }
+    ur.append(row);
   }
   const son = d.sleep === "on";
   $("sl-off").classList.toggle("on", !son); $("sl-on").classList.toggle("on", son);

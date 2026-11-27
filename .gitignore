@@ -31,11 +31,16 @@ tools/j49-screen/target/
 tools/dfu-install/uboot/out/u-boot-2024.07/
 tools/dfu-install/uboot/out/*.tar.bz2
 
-# Loader images from NestDFUAttack / cuckoo_loader: not in this repository (see
-# tools/dfu-install/nest-dfu/README.md), and our own built images: build them or take a release.
+# Images. The five the installer uses are in the repository, as they were in the last release
+# (who made them, licences and sources: tools/web-installer/images-notice.md); everything else
+# in these directories is a build product.
 tools/dfu-install/nest-dfu/*
 !tools/dfu-install/nest-dfu/README.md
 !tools/dfu-install/nest-dfu/check.sh
-tools/dfu-install/installer/out/
-tools/dfu-install/uboot/out/
+!tools/dfu-install/nest-dfu/x-load.bin
+!tools/dfu-install/nest-dfu/u-boot.bin
+tools/dfu-install/installer/out/*
+!tools/dfu-install/installer/out/uImage-j49-a
+tools/dfu-install/uboot/out/*
+!tools/dfu-install/uboot/out/u-boot-nest-j49.uimg
 docs/hw/omap3-xloader-stock.asm

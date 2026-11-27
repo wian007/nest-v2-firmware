@@ -13,6 +13,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/../../../tools:${THISDIR}/files:"
 SRC_URI = "file://j49-update/Cargo.toml \
            file://j49-update/Cargo.lock \
            file://j49-update/src/main.rs \
+           file://j49-update/repos.default \
            file://j49-update-confirm.service \
            file://j49-update-confirm.timer \
            file://j49-update-check.service \
@@ -33,6 +34,13 @@ do_install:append() {
 	done
 }
 
-FILES:${PN} += "${systemd_system_unitdir}"
+# the standard repositories whose releases are the versions on offer; an image of your own
+# replaces this file (a bbappend) or the owner names other repositories on the device
+do_install:append() {
+	install -d ${D}${datadir}/j49
+	install -m 0644 ${UNPACKDIR}/j49-update/repos.default ${D}${datadir}/j49/update-repos
+}
+
+FILES:${PN} += "${systemd_system_unitdir} ${datadir}/j49"
 # https with curl; the flash memory with mtd-utils
 RDEPENDS:${PN} += "curl ca-certificates mtd-utils"

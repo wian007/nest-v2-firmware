@@ -1,17 +1,22 @@
 # nest-dfu: the loader images of the USB boot chain
 
-The first stage of the install starts the thermostat over USB with three images that are **not
-in this repository**: a TI x-loader with a USB download handler, a U-Boot 2012.10 for the board
-that runs from RAM, and a 2.6.37 rescue kernel. They are GPL-2.0 software from the NestDFUAttack
-work of GTVHacker; the cuckoo-nest project keeps the sources and a build script:
+The install starts the thermostat over USB with two loaders, a TI x-loader with a USB download
+handler and a U-Boot 2012.10 for the board that runs from RAM, and then the service kernel
+(`../payload/nest-service-uImage`). The two loaders are **in this directory**, as they were in
+the last release. They are GPL-2.0 software from the NestDFUAttack work of GTVHacker; the
+cuckoo-nest project keeps the sources and a build script:
 
 - https://github.com/gtvhacker/NestDFUAttack
 - https://github.com/cuckoo-nest/cuckoo_loader (`build.sh` builds x-loader, U-Boot and the kernel
   from https://github.com/cuckoo-nest/x-loader, `u-boot` and `linux`)
 
-Build them, or take them from a copy you trust, and put them in this directory under the names
-below. `./check.sh` compares them with the checksums the install was tested with. An image you
+Who made each image, its licence and where its source is: `../../web-installer/images-notice.md`.
+`./check.sh` compares the files with the checksums the install was tested with. An image you
 built yourself will have another checksum; whether such an image works here was not tested.
+
+The two kernels in the table (`rescueUImage`, `uImage`) are those of NestDFUAttack. The install
+does not use them any more and they are not in this repository; they are named for the notes
+below, which are about the first, command-line route.
 
 | file | size | sha256 | role |
 |---|---|---|---|

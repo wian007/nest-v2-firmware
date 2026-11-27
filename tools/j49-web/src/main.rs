@@ -401,6 +401,8 @@ fn check_device(body: &str) -> Result<Vec<(&'static str, &'static str, String)>,
             "min_off" => ("/var/lib/j49/thermostat", "min_off", int(0, 600)),
             "min_on" => ("/var/lib/j49/thermostat", "min_on", int(0, 600)),
             "update_check" => ("/var/lib/j49/update", "check", (v == "on" || v == "off").then(|| v.clone())),
+            "update_pre" => ("/var/lib/j49/update", "prerelease", (v == "on" || v == "off").then(|| v.clone())),
+            "update_std" => ("/var/lib/j49/update", "standard", (v == "on" || v == "off").then(|| v.clone())),
             _ => return Err(format!("{}: {k}", tw("err.unknown_setting"))),
         };
         out.push((file, key, val.ok_or(format!("{} {key}", tw("err.bad_value")))?));
@@ -659,7 +661,7 @@ fn device_json() -> String {
     let nets: Vec<String> =
         wifi_saved().iter().map(|n| format!("{{\"ssid\":{},\"current\":{}}}", json_str(n), *n == wssid)).collect();
     format!(
-        "{{\"brightness\":{},\"volume\":{},\"ringrev\":{},\"cards\":6,\"caps\":{},\"font\":{},\"sleep\":{},\"sleep_state\":{},\"sleep_why\":{},\"sleeps\":{},\"last_slept\":{},\"last_wake\":{},\"upd_check\":{},\"upd_url\":{},\"upd_latest\":{},\"upd_busy\":{},\"upd_error\":{},\"offset\":{},\"min_off\":{},\"min_on\":{},\"commit\":{},\"dirty\":{},\"commit_date\":{},\
+        "{{\"brightness\":{},\"volume\":{},\"ringrev\":{},\"cards\":6,\"caps\":{},\"font\":{},\"sleep\":{},\"sleep_state\":{},\"sleep_why\":{},\"sleeps\":{},\"last_slept\":{},\"last_wake\":{},\"upd_check\":{},\"upd_pre\":{},\"upd_latest\":{},\"upd_newer\":{},\"upd_busy\":{},\"upd_error\":{},\"upd_version\":{},\"upd_from\":{},\"upd_std\":{},\"upd_repos\":[{}],\"upd_versions\":[{}],\"offset\":{},\"min_off\":{},\"min_on\":{},\"commit\":{},\"dirty\":{},\"commit_date\":{},\
 \"built\":{},\"kernel\":{},\"uptime\":{uptime},\"ip\":{},\"mac\":{},\"wifi_state\":{},\"wifi_ssid\":{},\"networks\":[{}]}}",
         g(&sc, "brightness", "100"),
         g(&sc, "volume", "5"),
@@ -673,10 +675,16 @@ fn device_json() -> String {
         g(&kv("/run/j49-sleep.state"), "last_slept", "0"),
         g(&kv("/run/j49-sleep.state"), "last_wake", ""),
         g(&kv("/var/lib/j49/update"), "check", "off"),
-        g(&kv("/var/lib/j49/update"), "url", ""),
+        g(&kv("/var/lib/j49/update"), "prerelease", "off"),
         g(&kv("/run/j49-update.state"), "latest", ""),
+        g(&kv("/run/j49-update.state"), "newer", "no"),
         g(&kv("/run/j49-update.state"), "busy", ""),
         g(&kv("/run/j49-update.state"), "error", ""),
+        g(&kv("/run/j49-update.state"), "installed", ""),
+        g(&kv("/run/j49-update.state"), "from", ""),
+        g(&kv("/var/lib/j49/update"), "standard", "on"),
+        update_repos(),
+        update_versions(),
         g(&th, "offset", "-2.0"),
         g(&th, "min_off", "10"),
         g(&th, "min_on", "0"),
@@ -691,6 +699,42 @@ fn device_json() -> String {
         json_str(&wssid),
         nets.join(",")
     )
+}
+
+// ---------------- updates (j49-update) ----------------
+/// The repositories in use as JSON objects (without tokens): the standard ones unless switched
+/// off, and the owner's own.
+fn update_repos() -> String {
+    let conf = std::fs::read_to_string(p("/var/lib/j49/update")).unwrap_or_default();
+    let clean = |u: &str| u.trim_end_matches('/').trim_end_matches(".git").to_string();
+    let own: Vec<String> = conf.lines().filter_map(|l| l.trim().strip_prefix("repo=")).filter_map(|l| l.split_whitespace().next().map(clean)).collect();
+    let std_off = kv_text(&conf).get("standard").map(|s| s == "off").unwrap_or(false) && !own.is_empty();
+    let mut out: Vec<String> = Vec::new();
+    if !std_off {
+        for u in std::fs::read_to_string(p("/usr/share/j49/update-repos")).unwrap_or_default().lines().map(|l| clean(l.trim())).filter(|l| l.starts_with("https://")) {
+            out.push(format!("{{\"url\":{},\"own\":false}}", json_str(&u)));
+        }
+    }
+    for u in own {
+        out.push(format!("{{\"url\":{},\"own\":true}}", json_str(&u)));
+    }
+    out.join(",")
+}
+/// What "j49-update list" found last: tab separated tag, date, pre|release, yes|no (can be installed), size, repository.
+fn update_versions() -> String {
+    std::fs::read_to_string(p("/run/j49-update.versions"))
+        .unwrap_or_default()
+        .lines()
+        .filter_map(|l| {
+            let f: Vec<&str> = l.split('\t').collect();
+            (f.len() >= 6).then(|| format!("{{\"tag\":{},\"date\":{},\"pre\":{},\"ok\":{},\"repo\":{}}}", json_str(f[0]), json_str(f[1]), f[2] == "pre", f[3] == "yes", json_str(f[5])))
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+fn update_tool(args: &[&str]) -> Result<String, String> {
+    let o = std::process::Command::new("/usr/bin/j49-update").args(args).output().map_err(|e| e.to_string())?;
+    if o.status.success() { Ok(String::from_utf8_lossy(&o.stdout).trim().to_string()) } else { Err(String::from_utf8_lossy(&o.stderr).trim().trim_start_matches("j49-update: ").to_string()) }
 }
 
 // ---------------- login ----------------
@@ -1004,10 +1048,11 @@ fn handle(mut s: TcpStream) {
         ("POST", "/api/device") => match check_device(&r.body) {
             Ok(set) => {
                 let mut ok = true;
-                for file in [SCREEN_SETTINGS, "/var/lib/j49/thermostat", "/var/lib/j49/sleep"] {
+                for file in [SCREEN_SETTINGS, "/var/lib/j49/thermostat", "/var/lib/j49/sleep", "/var/lib/j49/update"] {
                     let keys: Vec<(&str, String)> = set.iter().filter(|(f, _, _)| *f == file).map(|(_, k, v)| (*k, v.clone())).collect();
                     if !keys.is_empty() {
-                        ok &= set_keys(file, &keys, 0o644);
+                        // the update settings can hold the token of a repository: for root only
+                        ok &= set_keys(file, &keys, if file == "/var/lib/j49/update" { 0o600 } else { 0o644 });
                     }
                 }
                 if ok {
@@ -1030,16 +1075,42 @@ fn handle(mut s: TcpStream) {
             Ok(()) => json(&mut s, "200 OK", &state_json()),
             Err(e) => msg(&mut s, "400 Bad Request", &e),
         },
-        // Updates (j49-update): looking is one order, installing another. Both run on their own,
-        // outside this service: an install ends in a restart.
-        ("POST", "/api/update-check") => {
-            let _ = std::process::Command::new("systemd-run").args(["--quiet", "--collect", "/usr/bin/j49-update", "check", "--now"]).status();
-            msg(&mut s, "200 OK", "ok");
-        }
+        // Updates (j49-update): looking is one order, installing another.
+        ("POST", "/api/update-list") => match update_tool(&["check", "--now"]) {
+            Ok(_) => json(&mut s, "200 OK", &state_json()),
+            Err(e) => msg(&mut s, "502 Bad Gateway", &e),
+        },
         ("POST", "/api/update-install") => {
-            eprintln!("update asked from the page");
-            let _ = std::process::Command::new("systemd-run").args(["--quiet", "--collect", "/usr/bin/j49-update", "install"]).status();
-            msg(&mut s, "200 OK", "ok");
+            // the name of a version as the list gave it; the install runs on its own and ends in a restart
+            let v = kv_text(&r.body).get("version").cloned().unwrap_or_default();
+            let from = kv_text(&r.body).get("repo").cloned().unwrap_or_default();
+            if v.is_empty() || v.len() > 60 || !v.chars().all(|c| c.is_ascii_alphanumeric() || "._-+".contains(c)) || !from.starts_with("https://") || from.len() > 200 || from.chars().any(|c| c.is_whitespace() || c.is_control()) {
+                msg(&mut s, "400 Bad Request", tw("err.bad_value"));
+            } else {
+                eprintln!("update to {v} from {from} asked from the page");
+                let _ = std::process::Command::new("systemd-run").args(["--quiet", "--collect", "/usr/bin/j49-update", "install", &v, &format!("--from={from}")]).status();
+                msg(&mut s, "200 OK", "ok");
+            }
+        }
+        ("POST", "/api/update-repo") => {
+            let b = kv_text(&r.body);
+            let get = |k: &str| b.get(k).cloned().unwrap_or_default();
+            let ok = |x: &str| x.len() < 200 && !x.chars().any(|c| c.is_whitespace() || c.is_control());
+            let res = if !ok(&get("url")) || !ok(&get("token")) {
+                Err(tw("err.bad_value").to_string())
+            } else {
+                match get("do").as_str() {
+                    "add" if get("token").is_empty() => update_tool(&["repo", "add", &get("url")]),
+                    "add" => update_tool(&["repo", "add", &get("url"), &get("token")]),
+                    "remove" => update_tool(&["repo", "remove", &get("url")]),
+                    "reset" => update_tool(&["repo", "reset"]),
+                    _ => Err(tw("err.bad_value").to_string()),
+                }
+            };
+            match res {
+                Ok(_) => { let _ = std::fs::remove_file(p("/run/j49-update.versions")); json(&mut s, "200 OK", &state_json()) }
+                Err(e) => msg(&mut s, "400 Bad Request", &e),
+            }
         }
         ("POST", "/api/restart") => {
             eprintln!("restart asked from the page");
@@ -1052,6 +1123,11 @@ fn handle(mut s: TcpStream) {
 }
 
 fn main() {
+    // "j49-web --state": what the page gets, on standard output (to look at it without a login)
+    if std::env::args().any(|a| a == "--state") {
+        println!("{}", state_json());
+        return;
+    }
     let port: u16 = std::env::var("J49_WEB_PORT").ok().and_then(|s| s.parse().ok()).unwrap_or(80);
     {
         use std::os::unix::fs::DirBuilderExt;

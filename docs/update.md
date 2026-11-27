@@ -1,7 +1,7 @@
 # Updates over the network (j49-update)
 
-**State (27 November 2026): written and tested on a PC against stand-ins for the flash tools.
-Not yet run on a thermostat, and not yet part of the image.**
+**State (27 November 2026): written and tested on a PC, with the real releases on GitHub and
+stand-ins for the flash tools. Not yet run on a thermostat.**
 
 The thermostat can take a new root file system over WiFi, without USB and without the ring
 gesture. Nothing happens by itself: looking for a newer version is off unless the owner
@@ -29,38 +29,58 @@ The record is one line of text: `J49SLOT1 active=<0|1> try=<0|1|-> left=<n> sum=
 Without a record the kernel command line decides, as before.
 
 **The kernel is not part of this.** It sits in `boot0`, has no second copy, and is updated over
-USB ([updating](../tools/dfu-install/update-from-linux.md)). A manifest can name the kernel it
-needs; `j49-update` then refuses instead of installing a system that cannot run.
+USB ([updating](../tools/dfu-install/update-from-linux.md)). A release whose system needs a newer
+kernel cannot say so yet.
+
+## Versions and repositories
+
+A version is a **release of a git repository** (GitHub, or Gitea/Forgejo, which list releases in
+the same way). A release that can be installed has two files attached: the root file system
+(`*.rootfs.jffs2`) and `SHA256SUMS` with its checksum.
+
+- The firmware carries a list of **standard repositories**: `/usr/share/j49/update-repos`, one
+  https address per line. The public image names `github.com/wian007/nest-v2-firmware`; an image
+  of your own replaces the file.
+- The owner can name **repositories of their own** next to them (any number, each with a token
+  when it is not public: a personal access token that can only read). Standard and own are
+  used side by side; `standard=off` leaves the standard ones out.
+- Every version is shown with the repository it comes from, and whether that is a standard one
+  or one of your own. What was installed remembers its repository. When two repositories have a
+  version of the same name, `install` wants to be told which (`--from=<address>`); the web page
+  always tells.
 
 ## Settings and commands
 
-`/var/lib/j49/update`:
+`/var/lib/j49/update` (readable for root only: it can hold a token):
 
-    check=off        # on: ask the address below once a day whether there is a newer version
-    url=https://.../manifest.txt
-
-The manifest, next to the image on any https server:
-
-    version=2026.12.01
-    rootfs=j49-image-nest-j49.rootfs.jffs2
-    size=21548920
-    sha256=<hex>
-    kernel=6.6.64          # optional
+    check=off          # on: look for a newer version once a day
+    prerelease=off     # on: count pre-releases too
+    standard=on        # off: only the repositories below
+    repo=https://git.example.org/me/my-firmware <token>
 
 | Command | What |
 |---|---|
-| `j49-update status` | running slot, the record, what was found |
-| `j49-update check --now` | fetch the manifest once, whatever `check=` says |
-| `j49-update install` | install what the manifest names |
+| `j49-update status` | version, commit and commit date of what runs, the slot, the repositories |
+| `j49-update list` | the versions the repositories offer |
+| `j49-update check --now` | the same, and note the newest (the daily timer runs `check`, which does nothing unless `check=on`) |
+| `j49-update install` | install the newest version |
+| `j49-update install <version> [--from=<repository>]` | install that version (an older one too) |
 | `j49-update install <file or https address> <sha256>` | install this image |
+| `j49-update repo add <address> [token]` / `repo remove <address>` / `repo reset` | repositories of your own |
 | `j49-update confirm` | make the running slot the active one (the timer does this) |
 | `j49-update back` | ask for a trial of the other slot as it is: back to the system before the update |
 
-`/run/j49-update.state` holds `installed=`, `latest=`, `checked=`, `busy=`, `error=` for the web
-page and Home Assistant.
+"Newer" means: another name than what runs, and published after this system was built.
+
+The web page has the same under "Updates over the network": what runs now, the daily look on or
+off, test versions on or off, the list of versions with a button per version, and the
+repositories.
+
+`/run/j49-update.state` holds `installed=`, `commit=`, `latest=`, `newer=`, `checked=`, `busy=`,
+`error=`; `/run/j49-update.versions` the list as it was last fetched.
 
 ## What it does not do yet
 
-- The image is checked against the SHA-256 in the manifest. Manifest and image come from the
-  same server: there is no signature yet, so whoever controls that address controls the update.
-- No button on the web page and no update entity in Home Assistant yet.
+- The image is checked against `SHA256SUMS` of the same release: there is no signature yet, so
+  whoever controls the repository controls the update.
+- No update entity in Home Assistant yet.

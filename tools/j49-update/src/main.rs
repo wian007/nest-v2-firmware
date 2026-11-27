@@ -14,23 +14,26 @@
 //      used up, and nandio starts the old system again.
 //
 // Nothing happens by itself. /var/lib/j49/update holds:
-//   check=off|on     ask the address below for a newer version (off unless switched on)
-//   url=<https://.../manifest.txt>
+//   check=off|on        look for a newer version once a day (off unless switched on)
+//   prerelease=off|on   count pre-releases as versions to offer
+//   repo=<https address of a repository> [token]     any number of these lines
+//   standard=on|off     off: leave the standard repositories out (only with repositories of your own)
+// Versions are the RELEASES of a git repository (GitHub, or Gitea/Forgejo: the same API shape).
+// The firmware carries a list of standard repositories (/usr/share/j49/update-repos); the
+// settings can name repositories of the owner next to them. Every version is shown with the
+// repository it comes from, and what was installed remembers it. A release that can be installed has two files attached: the root
+// file system (*.rootfs.jffs2) and SHA256SUMS with its checksum.
 // "check" only looks and writes /run/j49-update.state; installing is always a separate order
-// (the web page, Home Assistant, or "j49-update install" by hand).
-//
-// The manifest is text, key=value:
-//   version=2026.12.01      shown to the user; compared as text with /etc/j49-release
-//   rootfs=<file name next to the manifest, or a full address>
-//   size=<bytes>   sha256=<hex>
-//   kernel=<text>           optional: must occur in `uname -r`; else the update needs USB
+// (the web page, or "j49-update install" by hand).
 //
 // The kernel is not part of this: it sits in boot0, has no second copy, and is updated over USB.
 //
-//   j49-update status
-//   j49-update check                     fetch the manifest, write /run/j49-update.state
-//   j49-update install [--no-reboot]     install what the manifest names
+//   j49-update status                    what runs (version, commit, date), the slot, the repositories
+//   j49-update list                      the versions the repositories offer (/run/j49-update.versions)
+//   j49-update check [--now]             the same, when check=on or with --now; notes the newest
+//   j49-update install [<version>] [--from=<repository>] [--no-reboot]    the newest, or the one named
 //   j49-update install <file|address> <sha256> [--no-reboot]
+//   j49-update repo add <address> [token] | repo remove <address> | repo reset
 //   j49-update confirm                   make the running slot the active one
 //   j49-update back                      ask for a trial of the other slot as it is
 //
@@ -42,6 +45,9 @@ use std::process::{Command, Stdio};
 
 const CONF: &str = "/var/lib/j49/update";
 const STATE: &str = "/run/j49-update.state";
+const VERSIONS: &str = "/run/j49-update.versions";
+const REPOS_STD: &str = "/usr/share/j49/update-repos";
+const INSTALLED: &str = "/var/lib/j49/update.installed";
 const PAGE: usize = 2048;
 const TRIES: u32 = 1;
 /// What a new system takes over from the old one (files and whole directories).
@@ -206,25 +212,273 @@ fn die(msg: &str) -> ! {
     let _ = std::fs::write(p(STATE), format!("{}error={msg}\n", std::fs::read_to_string(p(STATE)).unwrap_or_default().lines().filter(|l| !l.starts_with("error=") && !l.starts_with("busy=")).map(|l| format!("{l}\n")).collect::<String>()));
     std::process::exit(1);
 }
-fn fetch(url: &str) -> Command {
+fn fetch(url: &str, token: &str) -> Command {
     let mut c = Command::new("curl");
-    c.args(["-fsSL", "--proto", "=https", "--retry", "3", "--connect-timeout", "20", url]);
+    c.args(["-fsSL", "--proto", "=https", "--retry", "3", "--connect-timeout", "20", "-A", "j49-update"]);
+    if !token.is_empty() {
+        c.args(["-H", &format!("Authorization: token {token}")]);
+    }
+    c.arg(url);
     c
+}
+/// A file attached to a release. A private repository on GitHub gives its files only through
+/// the API address, with a token and a header that asks for the file itself; everywhere else
+/// (public GitHub, Gitea, Forgejo) the download address works, with the token when there is one.
+fn fetch_asset(a: &Asset, repo: &str, token: &str) -> Command {
+    if !token.is_empty() && repo.starts_with("https://github.com/") && is_url(&a.api) {
+        let mut c = fetch(&a.api, token);
+        c.args(["-H", "Accept: application/octet-stream"]);
+        return c;
+    }
+    fetch(&a.url, token)
+}
+#[derive(Debug, Clone, PartialEq, Default)]
+struct Asset {
+    url: String, // the download address
+    api: String, // the address of the file in the API
 }
 fn is_url(s: &str) -> bool {
     s.starts_with("https://")
 }
-fn manifest() -> Result<(HashMap<String, String>, String), String> {
-    let url = kv_file(CONF).get("url").cloned().filter(|u| is_url(u)).ok_or("no address set (url= in /var/lib/j49/update; https only)")?;
-    let out = fetch(&url).output().map_err(|e| format!("curl: {e}"))?;
-    if !out.status.success() {
-        return Err("the manifest could not be fetched".into());
+
+// ---- repositories and their releases ----
+/// (address, token, the owner's own) of the repositories in use: the standard ones that came
+/// with the firmware (unless standard=off) and the owner's own, side by side.
+fn repos() -> Vec<(String, String, bool)> {
+    let parse = |text: &str, key: bool| -> Vec<(String, String, bool)> {
+        text.lines()
+            .map(|l| l.trim())
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| if key { l.strip_prefix("repo=") } else { Some(l) })
+            .filter_map(|l| {
+                let mut w = l.split_whitespace();
+                let url = w.next()?.trim_end_matches('/').trim_end_matches(".git").to_string();
+                is_url(&url).then(|| (url, w.next().unwrap_or("").to_string(), key))
+            })
+            .collect()
+    };
+    let conf = std::fs::read_to_string(p(CONF)).unwrap_or_default();
+    let own = parse(&conf, true);
+    let mut all = if kv(&conf).get("standard").map(|s| s == "off").unwrap_or(false) && !own.is_empty() { Vec::new() } else { parse(&std::fs::read_to_string(p(REPOS_STD)).unwrap_or_default(), false) };
+    for r in own {
+        if !all.iter().any(|x| x.0 == r.0) {
+            all.push(r);
+        }
     }
-    Ok((kv(&String::from_utf8_lossy(&out.stdout)), url))
+    all
 }
-fn installed() -> String {
+/// Where a repository lists its releases: GitHub has its own host for that, Gitea and Forgejo
+/// have /api/v1 on the same host.
+fn releases_url(repo: &str) -> Option<String> {
+    let rest = repo.strip_prefix("https://")?;
+    let (host, path) = rest.split_once('/')?;
+    let mut parts = path.split('/').filter(|x| !x.is_empty());
+    let (owner, name) = (parts.next()?, parts.next()?);
+    Some(if host == "github.com" { format!("https://api.github.com/repos/{owner}/{name}/releases?per_page=30") } else { format!("https://{host}/api/v1/repos/{owner}/{name}/releases?limit=30") })
+}
+
+/// Just enough JSON for a list of releases.
+#[derive(Debug, Clone, PartialEq)]
+enum J {
+    Null,
+    Bool(bool),
+    Num(f64),
+    Str(String),
+    Arr(Vec<J>),
+    Obj(Vec<(String, J)>),
+}
+impl J {
+    fn get(&self, k: &str) -> &J {
+        match self {
+            J::Obj(m) => m.iter().find(|(n, _)| n == k).map(|(_, v)| v).unwrap_or(&J::Null),
+            _ => &J::Null,
+        }
+    }
+    fn str(&self) -> &str {
+        match self { J::Str(s) => s, _ => "" }
+    }
+    fn arr(&self) -> &[J] {
+        match self { J::Arr(a) => a, _ => &[] }
+    }
+}
+fn json(text: &str) -> Option<J> {
+    fn ws(b: &[u8], i: &mut usize) {
+        while *i < b.len() && (b[*i] as char).is_ascii_whitespace() {
+            *i += 1;
+        }
+    }
+    fn string(b: &[u8], i: &mut usize) -> Option<String> {
+        *i += 1;
+        let mut out = Vec::new();
+        while *i < b.len() {
+            match b[*i] {
+                b'"' => { *i += 1; return String::from_utf8(out).ok(); }
+                b'\\' => {
+                    *i += 1;
+                    match *b.get(*i)? {
+                        b'n' => out.push(b'\n'),
+                        b't' => out.push(b'\t'),
+                        b'r' => out.push(b'\r'),
+                        b'u' => {
+                            let cp = u32::from_str_radix(std::str::from_utf8(b.get(*i + 1..*i + 5)?).ok()?, 16).ok()?;
+                            let mut buf = [0u8; 4];
+                            out.extend_from_slice(char::from_u32(cp).unwrap_or('?').encode_utf8(&mut buf).as_bytes());
+                            *i += 4;
+                        }
+                        c => out.push(c),
+                    }
+                    *i += 1;
+                }
+                c => { out.push(c); *i += 1; }
+            }
+        }
+        None
+    }
+    fn value(b: &[u8], i: &mut usize, depth: u32) -> Option<J> {
+        if depth > 40 {
+            return None;
+        }
+        ws(b, i);
+        match *b.get(*i)? {
+            b'{' => {
+                *i += 1;
+                let mut m = Vec::new();
+                loop {
+                    ws(b, i);
+                    if *b.get(*i)? == b'}' { *i += 1; return Some(J::Obj(m)); }
+                    if *b.get(*i)? == b',' { *i += 1; continue; }
+                    let k = string(b, i)?;
+                    ws(b, i);
+                    if *b.get(*i)? != b':' { return None; }
+                    *i += 1;
+                    m.push((k, value(b, i, depth + 1)?));
+                }
+            }
+            b'[' => {
+                *i += 1;
+                let mut a = Vec::new();
+                loop {
+                    ws(b, i);
+                    if *b.get(*i)? == b']' { *i += 1; return Some(J::Arr(a)); }
+                    if *b.get(*i)? == b',' { *i += 1; continue; }
+                    a.push(value(b, i, depth + 1)?);
+                }
+            }
+            b'"' => string(b, i).map(J::Str),
+            b't' => { *i += 4; Some(J::Bool(true)) }
+            b'f' => { *i += 5; Some(J::Bool(false)) }
+            b'n' => { *i += 4; Some(J::Null) }
+            _ => {
+                let st = *i;
+                while *i < b.len() && matches!(b[*i], b'-' | b'+' | b'.' | b'e' | b'E' | b'0'..=b'9') {
+                    *i += 1;
+                }
+                std::str::from_utf8(&b[st..*i]).ok()?.parse().ok().map(J::Num)
+            }
+        }
+    }
+    let mut i = 0;
+    value(text.as_bytes(), &mut i, 0)
+}
+
+/// One version on offer.
+#[derive(Debug, Clone, PartialEq)]
+struct Version {
+    tag: String,
+    date: String, // as the repository gives it: 2026-11-27T19:18:13Z
+    pre: bool,
+    repo: String,
+    rootfs: Asset, // the root file system; no address: this release cannot be installed
+    sums: Asset,   // SHA256SUMS
+    size: u64,
+}
+fn versions_of(repo: &str, text: &str) -> Vec<Version> {
+    let Some(j) = json(text) else { return Vec::new() };
+    j.arr()
+        .iter()
+        .filter(|r| !matches!(r.get("draft"), J::Bool(true)))
+        .map(|r| {
+            let asset = |pick: &dyn Fn(&str) -> bool| r.get("assets").arr().iter().find(|a| pick(a.get("name").str())).cloned().unwrap_or(J::Null);
+            let fs = asset(&|n| n.ends_with(".rootfs.jffs2"));
+            let sums = asset(&|n| n == "SHA256SUMS");
+            Version {
+                tag: r.get("tag_name").str().chars().filter(|c| c.is_ascii_alphanumeric() || "._-+".contains(*c)).take(60).collect(),
+                date: r.get("published_at").str().chars().take(25).collect(),
+                pre: matches!(r.get("prerelease"), J::Bool(true)),
+                repo: repo.to_string(),
+                rootfs: Asset { url: Some(fs.get("browser_download_url").str()).filter(|u| is_url(u) && !sums.get("browser_download_url").str().is_empty()).unwrap_or("").to_string(), api: fs.get("url").str().to_string() },
+                sums: Asset { url: sums.get("browser_download_url").str().to_string(), api: sums.get("url").str().to_string() },
+                size: match fs.get("size") { J::Num(n) => *n as u64, _ => 0 },
+            }
+        })
+        .filter(|v| !v.tag.is_empty())
+        .collect()
+}
+/// Every version the repositories offer, newest first. Errors per repository are told, not fatal.
+fn list() -> Vec<Version> {
+    let mut all = Vec::new();
+    for (repo, token, _) in repos() {
+        let Some(api) = releases_url(&repo) else { eprintln!("j49-update: {repo}: not the address of a repository"); continue };
+        match fetch(&api, &token).output() {
+            Ok(o) if o.status.success() => all.extend(versions_of(&repo, &String::from_utf8_lossy(&o.stdout))),
+            _ => eprintln!("j49-update: {repo}: the list of releases could not be fetched"),
+        }
+    }
+    all.sort_by(|a, b| b.date.cmp(&a.date));
+    let text: String = all.iter().map(|v| format!("{}\t{}\t{}\t{}\t{}\t{}\n", v.tag, v.date, if v.pre { "pre" } else { "release" }, if v.rootfs.url.is_empty() { "no" } else { "yes" }, v.size, v.repo)).collect();
+    let _ = std::fs::write(p(VERSIONS), text);
+    all
+}
+fn token_of(repo: &str) -> String {
+    repos().into_iter().find(|x| x.0 == repo).map(|x| x.1).unwrap_or_default()
+}
+/// The repository the running version was installed from by an update, if it was.
+fn installed_from() -> String {
+    let u = kv_file(INSTALLED);
+    if u.get("slot").is_some() && u.get("slot").cloned() == running_slot().map(|s| format!("root{s}")) { u.get("repo").cloned().unwrap_or_default() } else { String::new() }
+}
+/// What runs: (version if it came from an update or a tagged build, commit, commit date, built).
+fn installed() -> (String, String, String, String) {
     let r = kv_file("/etc/j49-release");
-    r.get("version").or(r.get("commit_date")).cloned().unwrap_or_default()
+    let g = |k: &str| r.get(k).cloned().unwrap_or_default();
+    let mut version = g("version");
+    // a version put there by an update, when it is about this very system
+    let u = kv_file(INSTALLED);
+    if u.get("slot").is_some() && u.get("slot").cloned() == running_slot().map(|s| format!("root{s}")) {
+        version = u.get("version").cloned().unwrap_or(version);
+    }
+    (version, g("commit"), g("commit_date"), g("built"))
+}
+/// The newest version that may be offered, and whether it is newer than what runs.
+fn newest(all: &[Version]) -> Option<(Version, bool)> {
+    let pre = kv_file(CONF).get("prerelease").map(|s| s == "on").unwrap_or(false);
+    let v = all.iter().find(|v| !v.rootfs.url.is_empty() && (pre || !v.pre))?.clone();
+    let (version, _, _, built) = installed();
+    // newer: another name than what runs, and published after this system was built
+    let newer = v.tag != version && (built.is_empty() || v.date.as_str() > built.as_str());
+    Some((v, newer))
+}
+fn write_state(all: &[Version]) {
+    let (version, commit, date, _) = installed();
+    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let (latest, newer) = newest(all).map(|(v, n)| (v.tag, n)).unwrap_or_default();
+    let latest_from = newest(all).map(|(v, _)| v.repo).unwrap_or_default();
+    let _ = std::fs::write(p(STATE), format!("installed={version}\nfrom={}\ncommit={commit}\ncommit_date={date}\nlatest={latest}\nlatest_from={latest_from}\nnewer={}\nchecked={t}\n", installed_from(), if newer { "yes" } else { "no" }));
+}
+fn set_repos(change: impl Fn(&mut Vec<String>)) {
+    let old = std::fs::read_to_string(p(CONF)).unwrap_or_default();
+    let mut other: Vec<String> = old.lines().filter(|l| !l.trim_start().starts_with("repo=")).map(|l| l.to_string()).collect();
+    let mut own: Vec<String> = old.lines().filter(|l| l.trim_start().starts_with("repo=")).map(|l| l.trim().to_string()).collect();
+    change(&mut own);
+    other.extend(own);
+    let _ = std::fs::create_dir_all(p("/var/lib/j49"));
+    let tmp = p(&format!("{CONF}.tmp"));
+    // a token may be in it: for root only
+    use std::os::unix::fs::OpenOptionsExt;
+    let ok = std::fs::OpenOptions::new().write(true).create(true).truncate(true).mode(0o600).open(&tmp).and_then(|mut f| f.write_all((other.join("\n") + "\n").as_bytes())).is_ok();
+    if !ok || std::fs::rename(&tmp, p(CONF)).is_err() {
+        die("could not write the settings");
+    }
 }
 /// Write the image that `src` gives into the mtd device, hash it on the way. Returns
 /// (sha256 of the image, sha256 of the image padded to whole pages, padded length).
@@ -252,7 +506,7 @@ fn stream(mut src: impl Read, dev: &str) -> Result<(String, String, u64), String
     padded.update(&vec![0xffu8; pad as usize]);
     Ok((h.hex(), padded.hex(), total + pad))
 }
-fn keep_files() -> Result<(), String> {
+fn keep_files(version: &str, repo: &str, slot: &str) -> Result<(), String> {
     if !root().is_empty() {
         return Ok(()); // a test on a PC
     }
@@ -274,11 +528,21 @@ fn keep_files() -> Result<(), String> {
         let _ = Command::new("rm").args(["-rf", &format!("{dest}{k}")]).status();
         ok &= Command::new("cp").args(["-a", k, &parent]).status().map(|s| s.success()).unwrap_or(false);
     }
+    // the name of the version, for the new system only: it is not written into the running one,
+    // which stays what it is when the trial fails
+    if !version.is_empty() {
+        let _ = std::fs::create_dir_all(format!("{dest}/var/lib/j49"));
+        let _ = std::fs::write(format!("{dest}{INSTALLED}"), format!("version={version}\nrepo={repo}\nslot={slot}\n"));
+    }
     let _ = Command::new("sync").status();
     let _ = Command::new("umount").arg(mnt).status();
     if ok { Ok(()) } else { Err("not every file could be copied to scratch".into()) }
 }
-fn install(source: &str, want_sha: &str, want_size: Option<u64>, reboot: bool) {
+enum Source<'a> {
+    Plain(&'a str),                        // a file, or an https address
+    Release(&'a Asset, &'a str, &'a str),  // a file of a release, its repository and token
+}
+fn install(source: Source, version: &str, want_sha: &str, want_size: Option<u64>, reboot: bool) {
     let me = running_slot().unwrap_or_else(|| die("cannot tell which slot is running"));
     let other = 1 - me;
     let name = ["root0", "root1"][other];
@@ -301,12 +565,16 @@ fn install(source: &str, want_sha: &str, want_size: Option<u64>, reboot: bool) {
     if !Command::new("flash_erase").args(["-q", &dev, "0", "0"]).status().map(|s| s.success()).unwrap_or(false) {
         die("could not erase the other slot");
     }
-    let res = if is_url(source) {
-        let mut c = fetch(source).stdout(Stdio::piped()).spawn().unwrap_or_else(|e| die(&format!("curl: {e}")));
+    let from = match &source { Source::Release(_, repo, _) => repo.to_string(), _ => String::new() };
+    let download = |mut cmd: Command| -> Result<(String, String, u64), String> {
+        let mut c = cmd.stdout(Stdio::piped()).spawn().map_err(|e| format!("curl: {e}"))?;
         let r = stream(c.stdout.take().unwrap(), &dev);
         if !c.wait().map(|s| s.success()).unwrap_or(false) { Err("the download broke off".into()) } else { r }
-    } else {
-        std::fs::File::open(source).map_err(|e| format!("{source}: {e}")).and_then(|f| stream(f, &dev))
+    };
+    let res = match source {
+        Source::Release(a, repo, token) => download(fetch_asset(a, repo, token)),
+        Source::Plain(src) if is_url(src) => download(fetch(src, "")),
+        Source::Plain(src) => std::fs::File::open(src).map_err(|e| format!("{src}: {e}")).and_then(|f| stream(f, &dev)),
     };
     let wipe = |why: &str| -> ! {
         let _ = Command::new("flash_erase").args(["-q", &dev, "0", "0"]).status();
@@ -332,7 +600,7 @@ fn install(source: &str, want_sha: &str, want_size: Option<u64>, reboot: bool) {
         wipe("what was read back from the flash memory differs from the image; the slot was erased again");
     }
     eprintln!("j49-update: {name} written and read back ({len} bytes)");
-    if let Err(e) = keep_files() {
+    if let Err(e) = keep_files(version, &from, name) {
         eprintln!("j49-update: WARNING: {e}; the new system may start without the settings of this one");
     }
     rec_write(&Rec { active: me, trial: Some(other), left: TRIES }).unwrap_or_else(|e| die(&e));
@@ -350,44 +618,85 @@ fn main() {
     match words.as_slice() {
         ["status"] | [] => {
             let c = kv_file(CONF);
-            println!("installed={}", installed());
+            let (version, commit, date, built) = installed();
+            println!("version={}", if version.is_empty() { "(not from a release)" } else { &version });
+            if !installed_from().is_empty() {
+                println!("from={}", installed_from());
+            }
+            println!("commit={commit}\ncommit_date={date}\nbuilt={built}");
             println!("slot={}", running_slot().map(|s| format!("root{s}")).unwrap_or("unknown".into()));
             match rec_read() {
                 Some(r) => println!("record=active root{}{}", r.active, r.trial.map(|t| format!(", trial of root{t} ({} left)", r.left)).unwrap_or_default()),
                 None => println!("record=none (the kernel command line decides)"),
             }
             println!("check={}", c.get("check").map(|s| s.as_str()).unwrap_or("off"));
-            println!("url={}", c.get("url").map(|s| s.as_str()).unwrap_or(""));
-            print!("{}", std::fs::read_to_string(p(STATE)).unwrap_or_default());
+            println!("prerelease={}", c.get("prerelease").map(|s| s.as_str()).unwrap_or("off"));
+            for (url, token, own) in repos() {
+                println!("repo={url} ({}{})", if own { "your own" } else { "standard" }, if token.is_empty() { "" } else { ", with a token" });
+            }
+            print!("{}", std::fs::read_to_string(p(STATE)).unwrap_or_default().lines().filter(|l| l.starts_with("latest=") || l.starts_with("newer=") || l.starts_with("checked=") || l.starts_with("busy=") || l.starts_with("error=")).map(|l| format!("{l}\n")).collect::<String>());
         }
-        ["check"] => {
-            if kv_file(CONF).get("check").map(|s| s != "on").unwrap_or(true) && !args.iter().any(|a| a == "--now") {
+        ["list"] | ["check"] => {
+            if words[0] == "check" && kv_file(CONF).get("check").map(|s| s != "on").unwrap_or(true) && !args.iter().any(|a| a == "--now") {
                 return; // not asked for
             }
-            match manifest() {
-                Ok((m, _)) => {
-                    let latest = m.get("version").cloned().unwrap_or_default();
-                    let t = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
-                    let _ = std::fs::write(p(STATE), format!("installed={}\nlatest={latest}\nchecked={t}\n", installed()));
-                    println!("installed={} latest={latest}", installed());
-                }
-                Err(e) => die(&e),
+            let all = list();
+            write_state(&all);
+            let (version, ..) = installed();
+            for v in &all {
+                let runs = v.tag == version && (installed_from().is_empty() || installed_from() == v.repo);
+                println!("{:<22} {:<20} {:<8} {}{}{}", v.tag, v.date, if v.pre { "pre" } else { "release" }, v.repo.trim_start_matches("https://"), if v.rootfs.url.is_empty() { "  (no image attached)" } else { "" }, if runs { "  <- runs now" } else { "" });
+            }
+            if all.is_empty() {
+                println!("no versions found");
             }
         }
-        ["install"] => {
-            let (m, url) = manifest().unwrap_or_else(|e| die(&e));
-            if let Some(k) = m.get("kernel").filter(|k| !k.is_empty()) {
-                let have = String::from_utf8_lossy(&Command::new("uname").arg("-r").output().map(|o| o.stdout).unwrap_or_default()).to_string();
-                if !have.contains(k.as_str()) {
-                    die(&format!("this version needs kernel {k}; this device has {}: update the kernel over USB first", have.trim()));
+        ["install"] | ["install", _] => {
+            let all = list();
+            let v = match words.get(1) {
+                Some(tag) => {
+                    // the same name can be in two repositories: --from=<address> says which
+                    let from = args.iter().find_map(|a| a.strip_prefix("--from=")).map(|u| u.trim_end_matches('/').trim_end_matches(".git").to_string());
+                    let hits: Vec<&Version> = all.iter().filter(|v| v.tag == *tag && from.as_ref().map(|f| *f == v.repo).unwrap_or(true)).collect();
+                    if hits.len() > 1 {
+                        die(&format!("version {tag} is in more than one repository: say which with --from=<address>"));
+                    }
+                    hits.first().cloned().cloned().unwrap_or_else(|| die(&format!("no version {tag} in the repositories")))
                 }
+                None => newest(&all).map(|x| x.0).unwrap_or_else(|| die("the repositories offer no version that can be installed")),
+            };
+            if v.rootfs.url.is_empty() {
+                die(&format!("version {} has no root file system and SHA256SUMS attached", v.tag));
             }
-            let file = m.get("rootfs").cloned().unwrap_or_else(|| die("the manifest names no rootfs"));
-            let src = if is_url(&file) { file } else { format!("{}/{file}", url.rsplit_once('/').map(|x| x.0).unwrap_or("")) };
-            let sha = m.get("sha256").cloned().unwrap_or_else(|| die("the manifest has no sha256"));
-            install(&src, &sha, m.get("size").and_then(|s| s.parse().ok()), reboot);
+            let token = token_of(&v.repo);
+            let sums = fetch_asset(&v.sums, &v.repo, &token).output().ok().filter(|o| o.status.success()).map(|o| String::from_utf8_lossy(&o.stdout).to_string()).unwrap_or_else(|| die("SHA256SUMS could not be fetched"));
+            let file = v.rootfs.url.rsplit('/').next().unwrap_or("");
+            let sha = sums.lines().find_map(|l| { let mut w = l.split_whitespace(); let h = w.next()?; (w.next()?.trim_start_matches('*') == file).then(|| h.to_string()) }).unwrap_or_else(|| die("SHA256SUMS does not name the root file system"));
+            eprintln!("j49-update: version {} from {}", v.tag, v.repo);
+            install(Source::Release(&v.rootfs, &v.repo, &token), &v.tag, &sha, Some(v.size).filter(|s| *s > 0), reboot);
         }
-        ["install", src, sha] => install(src, sha, std::fs::metadata(src).ok().map(|m| m.len()), reboot),
+        ["install", src, sha] => install(Source::Plain(src), "", sha, std::fs::metadata(src).ok().map(|m| m.len()), reboot),
+        ["repo", "add", url] | ["repo", "add", url, _] => {
+            let url = url.trim_end_matches('/').trim_end_matches(".git").to_string();
+            if releases_url(&url).is_none() || !is_url(&url) {
+                die("that is not the https address of a repository (https://host/owner/name)");
+            }
+            let token = words.get(3).copied().unwrap_or("");
+            set_repos(|own| {
+                own.retain(|l| l.split_whitespace().next() != Some(&format!("repo={url}")));
+                own.push(format!("repo={url} {token}").trim().to_string());
+            });
+            println!("added; it is used next to the standard repositories (standard=off in the settings leaves those out)");
+        }
+        ["repo", "remove", url] => {
+            let url = url.trim_end_matches('/').trim_end_matches(".git").to_string();
+            set_repos(|own| own.retain(|l| l.split_whitespace().next() != Some(&format!("repo={url}"))));
+            println!("removed");
+        }
+        ["repo", "reset"] => {
+            set_repos(|own| own.clear());
+            println!("only the standard repositories are in use");
+        }
         ["confirm"] => {
             let Some(me) = running_slot() else { die("cannot tell which slot is running") };
             match rec_read() {
@@ -399,7 +708,7 @@ fn main() {
                     eprintln!("j49-update: root{me} confirmed as the active system");
                 }
             }
-            let _ = std::fs::write(p(STATE), format!("installed={}\n", installed()));
+            let _ = std::fs::remove_file(p(STATE)); // what was found before the restart is about another system
         }
         ["back"] => {
             let Some(me) = running_slot() else { die("cannot tell which slot is running") };
@@ -407,7 +716,7 @@ fn main() {
             eprintln!("j49-update: trial of root{} asked for; restart to start it", 1 - me);
         }
         _ => {
-            eprintln!("usage: j49-update status | check [--now] | install [<file|https address> <sha256>] [--no-reboot] | confirm | back");
+            eprintln!("usage: j49-update status | list | check [--now] | install [<version>] | install <file|https address> <sha256> | repo add <address> [token] | repo remove <address> | repo reset | confirm | back   (--no-reboot with install)");
             std::process::exit(2);
         }
     }
@@ -427,6 +736,25 @@ mod tests {
         }
         assert_eq!(h.hex(), "cdc76e5c9914fb9281a1c7e284d73e67f1809a48a497200e046d39ccc7112cd0");
         assert_eq!(Sha256::new().hex(), "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855");
+    }
+    #[test]
+    fn releases() {
+        assert_eq!(releases_url("https://github.com/wian007/nest-v2-firmware").as_deref(), Some("https://api.github.com/repos/wian007/nest-v2-firmware/releases?per_page=30"));
+        assert_eq!(releases_url("https://git.example.org/me/fw").as_deref(), Some("https://git.example.org/api/v1/repos/me/fw/releases?limit=30"));
+        assert_eq!(releases_url("https://github.com/onlyowner"), None);
+        let text = r#"[
+          {"tag_name":"v2","published_at":"2026-12-02T10:00:00Z","prerelease":true,"draft":false,"name":"a \"quoted\" \u00e9",
+           "assets":[{"name":"j49-image-nest-j49.rootfs.jffs2","size":123,"browser_download_url":"https://h/d/v2/j49-image-nest-j49.rootfs.jffs2"},
+                     {"name":"SHA256SUMS","size":5,"browser_download_url":"https://h/d/v2/SHA256SUMS"}]},
+          {"tag_name":"v1","published_at":"2026-12-01T10:00:00Z","prerelease":false,"assets":[]},
+          {"tag_name":"draft","draft":true,"assets":[]}
+        ]"#;
+        let v = versions_of("https://h/o/r", text);
+        assert_eq!(v.len(), 2);
+        assert_eq!((v[0].tag.as_str(), v[0].pre, v[0].size, v[0].rootfs.url.as_str()), ("v2", true, 123, "https://h/d/v2/j49-image-nest-j49.rootfs.jffs2"));
+        assert_eq!((v[1].tag.as_str(), v[1].pre, v[1].rootfs.url.as_str()), ("v1", false, ""));
+        assert!(versions_of("x", "not json").is_empty());
+        assert!(versions_of("x", "{\"message\":\"Not Found\"}").is_empty());
     }
     #[test]
     fn record() {

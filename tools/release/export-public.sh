@@ -30,7 +30,8 @@ EXTRA="${J49_PRIVATE_PATTERNS:-$HOME/.config/j49/private-patterns}"
 if grep -rInE "$PATTERNS" "$OUT" --exclude-dir=.git | grep -v 'Copyright\|tools/omap-loader/omap_loader.c\|tools/release/export-public.sh'; then
     echo "^ private data in the export" >&2; bad=1
 fi
-big=$(find "$OUT" -path "$OUT/.git" -prune -o -type f -size +1M -print)
+# a large file is a mistake, except the two kernels the installer uses
+big=$(find "$OUT" -path "$OUT/.git" -prune -o -type f -size +1M -print | grep -v -e '/tools/dfu-install/payload/nest-service-uImage$' -e '/tools/dfu-install/installer/out/uImage-j49-a$' || true)
 [ -z "$big" ] || { echo "large files in the export:"; echo "$big"; bad=1; }
 [ -f "$OUT/LICENSE" ] && [ -f "$OUT/DISCLAIMER.md" ] || { echo "LICENSE or DISCLAIMER.md is missing" >&2; bad=1; }
 echo "exported $(find "$OUT" -path "$OUT/.git" -prune -o -type f -print | wc -l) files to $OUT"
