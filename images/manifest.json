@@ -1,0 +1,5 @@
+{
+  "xload": {"file": "x-load.bin", "size": 27876, "sha256": "aee635f0d09180677fa86fea6797b1ad36f64b112f7eea3a5572ab7f28fd5c21"},
+  "ubootram": {"file": "u-boot.bin", "size": 246572, "sha256": "52aa039f5b36d8cd5108e6bbb69f5dbd60a5c3750404c8d3fbc721d53721ccf0"},
+  "service": {"file": "nest-service-uImage", "size": 2827820, "sha256": "94b3489173572e763dde29169c14cfa64309446e13d71432cc6bb39f071160bc"}
+}

@@ -104,3 +104,13 @@ error.wrongdevice=This is not a Nest Learning Thermostat of the 2nd generation (
 error=It went wrong
 again=Try this step again
 cancelled=Nothing was chosen.
+
+thanks.title=With thanks to
+thanks.gtvhacker=for finding the way into the thermostat through its boot ROM, and for publishing the loaders and the rescue kernel (NestDFUAttack).
+thanks.cuckoo=for keeping the sources of the loaders and the kernel buildable, and for the wiki with the research on the backplate and the Heat Link.
+thanks.omap=for omap_loader, the tool whose protocol the first step of this page follows.
+thanks.foss=and the many projects in the image, for the software all of this is built with.
+thanks.note=None of them is responsible for this installer, and this project is not affiliated with Google or Nest.
+thanks.more=All credits
+thanks.images=The image files this page loads are free software. Who made each one, its licence and where its source is:
+thanks.images.link=the list
