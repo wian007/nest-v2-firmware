@@ -94,6 +94,7 @@ done.backup=The backup is made. Nothing on the thermostat was changed. Take it o
 done.restore=The thermostat is back on the stock firmware.
 
 log=Log
+error.stale=The thermostat is in its boot mode but does not answer. Take it off USB, hold the ring pressed for 10 seconds so it switches off fully, connect it again and repeat this step. If it keeps happening, the battery may be empty: leave it on USB for half an hour first.
 error=It went wrong
 again=Try this step again
 cancelled=Nothing was chosen.

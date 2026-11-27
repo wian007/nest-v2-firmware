@@ -81,6 +81,7 @@ done.install=Op de thermostaat draait nu de J49-software. De verwarming staat ui
 done.backup=De backup is gemaakt. Op de thermostaat is niets veranderd. Haal hem van USB en houd de ring 10 seconden ingedrukt om hem te herstarten.
 done.restore=De thermostaat draait weer de originele firmware.
 log=Logboek
+error.stale=De thermostaat staat in zijn opstartmodus maar antwoordt niet. Haal hem van USB, houd de ring 10 seconden ingedrukt zodat hij helemaal uitgaat, sluit hem weer aan en herhaal deze stap. Blijft het gebeuren, dan is de accu mogelijk leeg: laat hem dan eerst een half uur aan USB.
 error=Het ging mis
 again=Probeer deze stap opnieuw
 cancelled=Er is niets gekozen.
