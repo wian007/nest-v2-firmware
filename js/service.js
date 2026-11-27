@@ -167,12 +167,18 @@ export class Service {
     await this.send("WRITE " + name + " " + frames.length * part.erasesize + " " + mode);
     const ready = await this.answer();
     if (!ready.startsWith("READY")) throw new Error("unexpected answer: " + ready);
+    // block data goes in pieces, each answered with "+": the thermostat's serial port stops
+    // taking data when more comes at once than its small buffer holds
+    const chunk = +ready.split(" ")[2] || 2048;
     let crc = 0, skipped = 0;
     for (let i = 0; i < frames.length; i++) {
       const data = frames[i];
       if (data) {
-        const m = new Uint8Array(1 + data.length); m[0] = 68; m.set(data, 1); // 'D'
-        await this.write(m);
+        await this.write(Uint8Array.of(68)); // 'D'
+        for (let at = 0; at < data.length; at += chunk) {
+            await this.write(data.subarray(at, Math.min(at + chunk, data.length)));
+            if ((await this.r.byte()) !== 43) throw new Error("unexpected answer while sending " + name); // '+'
+        }
       } else {
         await this.write(Uint8Array.of(69)); // 'E'
       }
@@ -199,7 +205,17 @@ export class Service {
     }
     return this.writeFrames(name, frames, "shift", progress);
   }
-  async reboot() { await this.send("REBOOT"); try { await this.answer(); } catch (e) { /* it may be gone */ } }
+  /** Erase a whole partition. */
+  async erase(name) {
+    await this.send("ERASE " + name);
+    if ((await this.answer()) !== "OK") throw new Error("no OK after erasing " + name);
+  }
+  /** Restart the thermostat. into "dfu": our U-Boot then waits for the installer instead of
+   *  starting what is in the flash memory. Returns what the service answered. */
+  async reboot(into = "") {
+    await this.send(into ? "REBOOT " + into : "REBOOT");
+    try { return await this.answer(); } catch (e) { return ""; /* it may be gone */ }
+  }
 
   /** A full backup: every partition except the alias of the whole chip, written with sink(bytes).
    *  progress(doneBytes, totalBytes, name). Returns a summary per partition. */

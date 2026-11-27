@@ -19,16 +19,16 @@ const ADDR_UBOOT = 0x80100000, ADDR_KERNEL = 0x80a00000;
 // What each mode needs. "sha256" comes from images/manifest.json when the page has one.
 const ROLES = {
   xload: { text: "files.xload" }, ubootram: { text: "files.ubootram" }, service: { text: "files.service" },
-  uboot: { text: "files.uboot" }, installer: { text: "files.installer" }, rootfs: { text: "files.rootfs" }, kernel: { text: "files.kernel" },
+  uboot: { text: "files.uboot" }, rootfs: { text: "files.rootfs" }, kernel: { text: "files.kernel" },
   backupfile: { text: "files.backupfile", local: true },
 };
 const NEEDS = {
-  install: ["xload", "ubootram", "service", "uboot", "installer", "rootfs", "kernel"],
+  install: ["xload", "ubootram", "service", "uboot", "rootfs", "kernel"],
   backup: ["xload", "ubootram", "service"],
   restore: ["xload", "ubootram", "service", "backupfile"],
 };
 const STEPS = {
-  install: ["files", "rom", "svc", "backup", "uboot", "dfu", "done"],
+  install: ["files", "rom", "svc", "backup", "uboot", "dfu", "sys", "done"],
   backup: ["files", "rom", "svc", "backup", "done"],
   restore: ["files", "rom", "svc", "restore", "done"],
 };
@@ -41,7 +41,11 @@ let service = null, port = null, serialIo = null;
 const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private window */ } } };
 const parse = text => Object.fromEntries(text.split("\n").filter(l => l && !l.startsWith("#") && l.includes("=")).map(l => [l.slice(0, l.indexOf("=")).trim(), l.slice(l.indexOf("=") + 1).trim()]));
 const T = (k, vars) => { let s = texts[k] || fallback[k] || k; for (const [n, v] of Object.entries(vars || {})) s = s.replace("{" + n + "}", v); return s; };
-async function getText(url) { const r = await fetch(url); if (!r.ok) throw new Error(url + ": " + r.status); return r.text(); }
+// Nothing the page loads may come from the browser's cache: a rebuilt image with an old copy
+// of the list of checksums next to it passes every check and installs the old image. (Seen on
+// 27 November 2026: a kernel of three hours before was written to the thermostat.)
+const FRESH = { cache: "no-store" };
+async function getText(url) { const r = await fetch(url, FRESH); if (!r.ok) throw new Error(url + ": " + r.status); return r.text(); }
 async function setLang(code) {
   if (!(code in LANGS)) code = "en";
   try { texts = parse(await getText("lang/" + code + ".txt")); } catch (e) { texts = {}; code = "en"; }
@@ -60,12 +64,21 @@ const mb = n => (n / 1048576).toFixed(1);
 const hex = buf => Array.from(new Uint8Array(buf), b => b.toString(16).padStart(2, "0")).join("");
 function show() {
   const order = STEPS[mode];
-  for (const s of ["files", "rom", "svc", "backup", "uboot", "dfu", "restore", "done"]) {
+  for (const s of ["files", "rom", "svc", "backup", "uboot", "dfu", "sys", "restore", "done"]) {
     const el = $("s-" + s), i = order.indexOf(s);
     el.hidden = i < 0;
     el.className = i < step ? "done" : i === step ? "active" : "later";
   }
   $("done-text").textContent = T("done." + mode);
+}
+// A step can be started by hand with a click on its title: for a thermostat that is already
+// further along (in the installer mode of U-Boot, for example).
+for (const sname of ["rom", "svc", "backup", "uboot", "dfu", "sys", "restore"]) {
+  $("s-" + sname).querySelector("h2").addEventListener("click", () => {
+    if (!mode) return;
+    const i = STEPS[mode].indexOf(sname);
+    if (i >= 0) { step = i; show(); }
+  });
 }
 function next() { step++; show(); const s = STEPS[mode][step]; if (s) $("s-" + s).scrollIntoView({ behavior: "smooth", block: "center" }); }
 /** Run one step's work behind its button: errors go to the step's state line and the log. */
@@ -126,7 +139,7 @@ async function fetchImages() {
     const m = manifest[role];
     if (!m || files[role]) continue;
     try {
-      const r = await fetch("images/" + m.file);
+      const r = await fetch("images/" + m.file, FRESH);
       if (!r.ok) continue;
       files[role] = { name: m.file, data: new Uint8Array(await r.arrayBuffer()) };
       await checkFile(role, files[role]);
@@ -150,22 +163,38 @@ async function runRom() {
 }
 
 // ---------- step 3: the service ----------
-async function runService() {
-  state("svc", "");
-  // a port left open by an earlier try of this step is closed first
-  if (port) { try { await serialIo.rd.cancel(); serialIo.rd.releaseLock(); serialIo.wr.releaseLock(); await port.close(); } catch (e) { /* it was not open */ } port = null; }
+/** Let go of the serial port: stop reading, give the streams back, close. Without this the
+ *  browser keeps a port whose device has left the bus. */
+async function closePort() {
+  if (!port) return;
+  try { await serialIo.rd.cancel(); } catch (e) { /* already ended */ }
+  try { serialIo.rd.releaseLock(); serialIo.wr.releaseLock(); } catch (e) { /* already released */ }
+  try { await port.close(); } catch (e) { /* the device is gone */ }
+  port = null;
+}
+/** Open the serial port of the thermostat and get in step with nandio on it. `id` is the
+ *  step whose state line shows the waiting. */
+async function openService(id) {
+  state(id, "");
+  // a port left open by an earlier try is closed first
+  await closePort();
   port = await navigator.serial.requestPort({ filters: [SERIAL_FILTER] });
   await port.open({ baudRate: 115200, bufferSize: 1 << 20 });
   const rd = port.readable.getReader(), wr = port.writable.getWriter();
   serialIo = { rd, wr };
   const reader = new ByteReader(async () => { const { value, done } = await rd.read(); return done ? null : value; });
-  service = new Service(reader, d => wr.write(d), log);
-  state("svc", T("svc.waiting"));
+  const svc = new Service(reader, d => wr.write(d), log);
+  state(id, T("svc.waiting"));
   // count what comes in, so a silent line and a line that only repeats itself can be told apart
   let got = 0; const pull0 = reader.pull;
-  reader.pull = async () => { const v = await pull0(); if (v) { got += v.length; state("svc", T("svc.waiting") + " (" + got + " bytes)"); } return v; };
-  await service.start();
-  const parts = await service.info();
+  reader.pull = async () => { const v = await pull0(); if (v) { got += v.length; if (!svc.parts) state(id, T("svc.waiting") + " (" + got + " bytes)"); } return v; };
+  await svc.start();
+  await svc.info();
+  return svc;
+}
+async function runService() {
+  service = await openService("svc");
+  const parts = service.parts;
   // Is it the thermostat this installer is for? Nothing is read or written before this.
   const ident = await service.ident();
   log("the board says: model " + ident.model + ", hardware " + ident.hardware + ", revision " + ident.revision);
@@ -202,7 +231,7 @@ async function runBackup() {
   state("backup", T("backup.done", { mb: mb(file.size) }) + (errors ? " " + T("backup.errors", { n: errors }) : ""), errors ? "bad" : "ok");
   log("backup: " + file.size + " bytes, " + errors + " blocks with read errors");
   await service.show(errors ? "ERROR" : "DONE", 100, 0, T("panel.backup"));
-  if (mode === "backup") { await service.reboot(); }
+  if (mode === "backup") { await service.reboot(); await closePort(); }
   next();
 }
 
@@ -214,9 +243,20 @@ async function runUboot() {
     await service.writeImage(name, files.uboot.data, (d, t) => bar("uboot", (name === "spl1" ? t : 0) + d, 2 * t));
     log(name + " written and read back");
   }
+  // The kernel we install starts the system in root0 when there is one, and waits for the
+  // installer when there is none. Erase root0, so that it waits whatever was in it (the stock
+  // system, or ours from an earlier install).
+  state("uboot", T("uboot.writing", { name: "root0" }));
+  await service.show(T("panel.bootloader"), 0, 100, "root0");
+  await service.erase("root0");
+  log("root0 erased");
   await service.show("DONE", 100, 0, T("panel.bootloader"));
-  await service.reboot();
-  try { await port.close(); } catch (e) { /* gone */ }
+  // Our U-Boot starts the kernel in the flash memory when it can, and waits for a new kernel
+  // only when told to: the service leaves a mark in RAM for it.
+  const how = await service.reboot("dfu");
+  log("restart into the installer mode of U-Boot: " + (how || "no answer"));
+  if (how === "OK nomark") throw new Error("could not tell U-Boot to wait for the installer");
+  await closePort();
   state("uboot", T("uboot.done"), "ok");
   next();
 }
@@ -227,36 +267,43 @@ async function dfuDevice(ask) {
   if (known) return known;
   return ask ? navigator.usb.requestDevice({ filters: [DFU_FILTER] }) : null;
 }
-/** Wait until U-Boot's DFU device is on the bus (again). */
-function dfuBack() {
-  return new Promise(resolve => {
-    const seen = async () => { const d = await dfuDevice(false); if (d) { navigator.usb.removeEventListener("connect", seen); clearInterval(poll); resolve(d); } };
-    navigator.usb.addEventListener("connect", seen);
-    const poll = setInterval(seen, 3000);
-    $("dfu-again").hidden = false;
-    $("dfu-again").onclick = async () => { try { await navigator.usb.requestDevice({ filters: [DFU_FILTER] }); seen(); } catch (e) { /* nothing chosen */ } };
-  });
-}
 async function runDfu() {
-  let dfu = new Dfu(await dfuDevice(true), log);
+  const dfu = new Dfu(await dfuDevice(true), log);
   log("DFU targets: " + (await dfu.open()).join(", "));
-  const total = files.installer.data.length + files.rootfs.data.length;
-  state("dfu", T("dfu.stage2", { mb: mb(total) }));
-  await dfu.download("installer", files.installer.data, d => bar("dfu", d, total));
-  await dfu.download("rootfs", files.rootfs.data, d => bar("dfu", files.installer.data.length + d, total));
-  await dfu.detach();
-  state("dfu", T("dfu.installing"));
-  // the device leaves the bus, installs, and comes back in the same DFU mode
-  await new Promise(r => setTimeout(r, 15000));
-  dfu = new Dfu(await dfuBack(), log);
-  $("dfu-again").hidden = true;
-  await dfu.open();
-  state("dfu", T("dfu.stage3")); bar("dfu", 0, 1);
+  // The kernel goes into the flash memory (boot0), written by U-Boot so that U-Boot can read
+  // it. When we leave, the thermostat restarts and starts that kernel; root0 is empty, so the
+  // kernel waits for the installer (the next step). Nothing is started from RAM: that was
+  // tried and our U-Boot restarts the board instead.
+  state("dfu", T("dfu.sending", { name: "boot0" }));
   await dfu.download("boot0", files.kernel.data, (d, t) => bar("dfu", d, t));
-  // the installer kernel is still in RAM: overwrite its start, or U-Boot would run it again
-  await dfu.download("installer", new Uint8Array(4));
   await dfu.detach();
-  state("dfu", T("dfu.done"), "ok");
+  state("dfu", T("dfu.sent"), "ok");
+  next();
+  // The thermostat now restarts and is four USB devices one after the other (the boot ROM,
+  // U-Boot with a serial port of its own, then the kernel). With the list of serial ports open
+  // during that, Chrome crashed. So the next step waits until the kernel is up.
+  const go = $("sys-go");
+  go.disabled = true;
+  for (let n = 25; n > 0; n--) { state("sys", T("sys.soon", { n })); await new Promise(r => setTimeout(r, 1000)); }
+  state("sys", "");
+  go.disabled = false; go.focus();
+}
+
+// ---------- step 7: the root file system, through nandio in the installer kernel ----------
+async function runSys() {
+  const svc = await openService("sys");
+  const root = svc.parts.find(p => p.name === "root0");
+  if (!root) throw new Error("the installer kernel shows no partition root0");
+  if (files.rootfs.data.length > root.size) throw new Error("the root file system is larger than root0");
+  log("installer kernel: " + svc.parts.map(p => p.name).join(" "));
+  state("sys", T("sys.writing"));
+  await svc.show(T("panel.system"), 0, 100, "root0");
+  const r = await svc.writeImage("root0", files.rootfs.data, (d, t) => bar("sys", d, t));
+  log("root0 written and read back" + (r.skipped ? " (" + r.skipped + " bad blocks left out)" : ""));
+  await svc.show("DONE", 100, 0, T("panel.system"));
+  await svc.reboot();
+  await closePort();
+  state("sys", T("sys.done"), "ok");
   next();
 }
 
@@ -279,7 +326,7 @@ async function runRestore() {
   }
   await service.show("DONE", 100, 0, T("panel.restore"));
   await service.reboot();
-  try { await port.close(); } catch (e) { /* gone */ }
+  await closePort();
   state("restore", T("restore.done"), "ok");
   next();
 }
@@ -316,4 +363,5 @@ guard("backup", $("backup-go"), runBackup);
 $("backup-skip").onclick = () => { if (mode === "install") next(); };
 guard("uboot", $("uboot-go"), runUboot);
 guard("dfu", $("dfu-go"), runDfu);
+guard("sys", $("sys-go"), runSys);
 guard("restore", $("restore-go"), runRestore);

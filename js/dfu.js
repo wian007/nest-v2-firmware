@@ -21,16 +21,35 @@ export class Dfu {
     this.iface = itf.interfaceNumber;
     this.alts = itf.alternates.map(a => ({ n: a.alternateSetting, name: a.interfaceName || "" }));
     await dev.claimInterface(this.iface);
-    // wTransferSize is in the DFU functional descriptor (type 0x21) behind the interface
+    // The names of the targets and the block size are in the configuration descriptor: the
+    // name as a string index per alternate setting (the browser does not always fill in
+    // interfaceName; seen with Chrome on the device: all names empty), wTransferSize in the
+    // DFU functional descriptor (type 0x21).
     try {
       const r = await dev.controlTransferIn({ requestType: "standard", recipient: "device", request: 6, value: 0x0200, index: 0 }, 1024);
       const b = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
       for (let i = 0; i + 1 < b.length && b[i] > 0; i += b[i]) {
-        if (b[i + 1] === 0x21 && b[i] >= 7) { this.transfer = b[i + 5] | (b[i + 6] << 8); break; }
+        if (b[i + 1] === 0x21 && b[i] >= 7) this.transfer = b[i + 5] | (b[i + 6] << 8);
+        if (b[i + 1] === 4 && b[i] >= 9 && b[i + 2] === this.iface) {
+          const alt = this.alts.find(a => a.n === b[i + 3]);
+          if (alt && !alt.name && b[i + 8]) alt.name = await this.string(b[i + 8]);
+        }
       }
-    } catch (e) { /* keep the default */ }
+    } catch (e) { /* keep what we have */ }
+    // U-Boot's own order (dfu_alt_info in tools/dfu-install/uboot/files/nest_j49.env), for a
+    // device that gives no names at all
+    const known = ["installer", "rootfs", "boot0", "ring"];
+    if (this.alts.length === known.length && this.alts.every(a => !a.name)) this.alts.forEach((a, i) => a.name = known[i]);
     if (this.transfer < 64 || this.transfer > 65535) this.transfer = 4096;
     return this.alts.map(a => a.name);
+  }
+  /** A string descriptor (US English), as text. */
+  async string(index) {
+    const r = await this.dev.controlTransferIn({ requestType: "standard", recipient: "device", request: 6, value: 0x0300 | index, index: 0x0409 }, 255);
+    const b = new Uint8Array(r.data.buffer, r.data.byteOffset, r.data.byteLength);
+    let s = "";
+    for (let i = 2; i + 1 < Math.min(b.length, b[0]); i += 2) s += String.fromCharCode(b[i] | (b[i + 1] << 8));
+    return s;
   }
   async out(request, value, data) {
     const r = await this.dev.controlTransferOut({ requestType: "class", recipient: "interface", request, value, index: this.iface }, data);
@@ -78,6 +97,8 @@ export class Dfu {
   /** Leave DFU: U-Boot goes on with its boot command. The device drops off the bus. */
   async detach() {
     try { await this.out(REQ.DETACH, 1000); } catch (e) { /* it may be gone before it answers */ }
-    try { await this.dev.close(); } catch (e) { /* gone */ }
+    // The device is not closed here: it restarts at this moment, and the browser lets go of
+    // it by itself when it leaves the bus. (Chrome crashed two seconds after a detach followed
+    // by close() on 27 November 2026; whether that was the cause is not known.)
   }
 }

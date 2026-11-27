@@ -21,8 +21,7 @@ NestDFUAttack (2014), which found that the boot ROM of the thermostat accepts co
 | File | What | Licence | Source |
 |---|---|---|---|
 | `u-boot-nest-j49.uimg` | U-Boot 2024.07 with our board support | GPL-2.0-or-later | <https://source.denx.de/u-boot/u-boot> plus `tools/dfu-install/uboot` in this project |
-| `uImage-j49-a` | Linux 6.6 with our device tree and patches | GPL-2.0 | <https://kernel.org> plus `meta-j49/recipes-kernel` in this project |
-| `zImage-installer` | The same kernel with a small initramfs that writes the root file system | GPL-2.0; our programs MIT | as above, plus `tools/dfu-install/installer` |
+| `uImage-j49-a` | Linux 6.6 with our device tree and patches, and `nandio` as its first program: it starts the system, or waits for the installer when there is none | GPL-2.0; `nandio` MIT (linked with musl, MIT) | <https://kernel.org> plus `meta-j49/recipes-kernel` and `tools/dfu-install` in this project |
 | `*.rootfs.jffs2` | The root file system, built with the Yocto Project: many packages, each under its own licence (the build writes the list to `build/tmp/deploy/licenses`) | various free software licences | `meta-j49` and `kas/nest-j49.yml` in this project build it from the sources of each package |
 
 This project: <https://github.com/wian007/nest-v2-firmware> (our own code MIT). To get the
@@ -37,9 +36,8 @@ project.
 | File | Size | sha256 |
 |---|---|---|
 | `j49-image-nest-j49.rootfs.jffs2` | 21102816 | `6d2f664b287077e6649662baccffbdbfbae8bc77381e820f6024574619cec2e9` |
-| `nest-service-uImage` | 2827820 | `94b3489173572e763dde29169c14cfa64309446e13d71432cc6bb39f071160bc` |
+| `nest-service-uImage` | 2829228 | `a3f01153d39df3d1f0e014ed352a2e9db82cb9d61cb8ce2be594101dedafe233` |
 | `u-boot.bin` | 246572 | `52aa039f5b36d8cd5108e6bbb69f5dbd60a5c3750404c8d3fbc721d53721ccf0` |
 | `u-boot-nest-j49.uimg` | 548584 | `ae7a0fd748eb7671626593a56a00396f8494296d0f76a4f2528f29444d221cd2` |
-| `uImage-j49-a` | 4893677 | `11d6fad716d571d5ceeb06d80d91f9f49b3aa63e5ffcdf2c5013b039ebe8f15d` |
+| `uImage-j49-a` | 4944557 | `690112ac7540e7d8fb1122b9939093905cf81f952f65f78d3416707ba7a7ab4a` |
 | `x-load.bin` | 27876 | `aee635f0d09180677fa86fea6797b1ad36f64b112f7eea3a5572ab7f28fd5c21` |
-| `zImage-installer` | 6374161 | `8b217558a89c0ac5b0b03174c23ce861d96fdf10ba0ebb4036708c3032739bbe` |
