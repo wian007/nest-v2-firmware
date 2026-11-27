@@ -60,6 +60,9 @@
  *                                  "OK <blocks with data> <not readable: 0 or 1>".
  *                                  Blocks written by the other kernel are not readable (another
  *                                  error correction layout): this tells whose data is in it.
+ *   SLOT | SLOT pick | SLOT set <active> <try|-> <left>
+ *                                  the record that says which of the two systems starts; see
+ *                                  "which of the two systems to start" below.
  *   GET <name> <path>              a small file out of the jffs2 file system in that partition:
  *                                  "DATA <length>", the bytes, "SUM <crc32 hex>", "OK". Only the
  *                                  kernel that wrote a partition reads it without errors, so the
@@ -662,50 +665,98 @@ static void init_system(void)
 /* Under our own kernel, as init: start the system in root0 when there is one. Returns only
  * when there is none (or it cannot be started): the caller then serves the installer.
  * "A system" = root0 mounts as jffs2 and has an init program. */
-static void boot_system(void)
+/* ---- which of the two systems to start ----
+ * The flash memory has room for two systems, root0 and root1. An update over the network
+ * (j49-update, in the running system) writes the new system into the one that is not running
+ * and asks for a trial: the record below says "try slot N, <left> times". We start it and count
+ * down first. A system that comes up well confirms itself ("active=N", no trial). One that does
+ * not come up never confirms; the watchdog restarts the board, the count is used up, and we
+ * start the old system again. Without a record the kernel command line decides, as before.
+ *
+ * The record is one line of text in the first page of the partition env1 (our U-Boot keeps
+ * nothing there):   J49SLOT1 active=<0|1> try=<0|1|-> left=<n> sum=<crc32 of the text before>
+ */
+#define SLOT_PART "env1"
+#define SLOT_PAGE 2048
+struct slot_rec { int active, trial, left; };
+static int slot_read(struct slot_rec *r)
+{
+    struct part *p = find(SLOT_PART);
+    char text[128], t[8] = ""; unsigned long sum = 0; char *q; int fd; ssize_t n;
+    if (!p) return -1;
+    fd = open(p->dev, O_RDONLY);
+    if (fd < 0) return -1;
+    n = pread(fd, text, sizeof text - 1, 0);
+    close(fd);
+    if (n <= 0) return -1;
+    text[n] = 0;
+    if (strncmp(text, "J49SLOT1 ", 9) || !(q = strstr(text, " sum="))) return -1;
+    if (sscanf(q, " sum=%lx", &sum) != 1 || crc_add(0, (unsigned char *)text, (unsigned long)(q - text)) != sum) return -1;
+    if (sscanf(text, "J49SLOT1 active=%d try=%7s left=%d", &r->active, t, &r->left) != 3) return -1;
+    r->trial = t[0] == '-' ? -1 : atoi(t);
+    if (r->active < 0 || r->active > 1 || r->trial > 1) return -1;
+    return 0;
+}
+static int slot_write(const struct slot_rec *r)
+{
+    struct part *p = find(SLOT_PART);
+    static unsigned char page[SLOT_PAGE];
+    char text[100], t[12]; int fd, n, bad;
+    if (!p) return -1;
+    if (r->trial < 0) strcpy(t, "-"); else snprintf(t, sizeof t, "%d", r->trial);
+    n = snprintf(text, sizeof text, "J49SLOT1 active=%d try=%s left=%d", r->active, t, r->left);
+    n += snprintf(text + n, sizeof text - (size_t)n, " sum=%08lx\n", crc_add(0, (unsigned char *)text, (unsigned long)n));
+    memset(page, 0xff, sizeof page);
+    memcpy(page, text, (size_t)n);
+    fd = open(p->dev, O_RDWR);
+    if (fd < 0) return -1;
+    bad = erase_block(fd, p, 0) || pwrite(fd, page, sizeof page, 0) != (ssize_t)sizeof page;
+    if (!fake) fsync(fd);
+    close(fd);
+    return bad ? -1 : 0;
+}
+/* The slot to start (0 or 1), or -1 when there is no record. Counts a trial down. */
+static int slot_pick(void)
+{
+    struct slot_rec r;
+    if (slot_read(&r)) return -1;
+    if (r.trial >= 0 && r.left > 0) {
+        r.left--;
+        if (slot_write(&r)) return r.active;      /* cannot count: do not risk a loop on the new one */
+        return r.trial;
+    }
+    if (r.trial >= 0) { r.trial = -1; r.left = 0; slot_write(&r); }   /* the trial was never confirmed */
+    return r.active;
+}
+
+/* Does this partition hold a file system? Look before mounting: an empty partition is not
+ * mounted at all. Mounted read-write on empty flash, jffs2 starts to write by itself; on this
+ * board that code has crashed in the kernel before (27 November 2026). */
+static int has_system_mark(const char *dev)
+{
+    char chr[32]; unsigned char head[2] = { 0xff, 0xff }; unsigned long off, erase = 0x20000, size = 0; int fd, found = 0, i;
+    snprintf(chr, sizeof chr, "/dev/mtd%s", dev + strlen("/dev/mtdblock"));
+    for (i = 0; i < nparts; i++) if (!strcmp(parts[i].dev, chr)) { erase = parts[i].erasesize; size = parts[i].size; }
+    fd = open(chr, O_RDONLY);
+    if (fd < 0) return 0;
+    /* the mark (0x1985, either byte order) at the start of one of the first good blocks */
+    for (off = 0; off < size && off < 8 * erase && !found; off += erase) {
+        long long o = (long long)off;
+        if (ioctl(fd, MEMGETBADBLOCK, &o) > 0) continue;
+        if (pread(fd, head, 2, (off_t)off) == 2 && ((head[0] == 0x85 && head[1] == 0x19) || (head[0] == 0x19 && head[1] == 0x85))) found = 1;
+    }
+    close(fd);
+    return found;
+}
+/* Start the system in this partition. Comes back only when there is none. */
+static void start_from(const char *dev)
 {
     static const char *const inits[] = { "/sbin/init", "/lib/systemd/systemd", "/usr/lib/systemd/systemd", NULL };
-    char dev[32] = ""; struct utsname u; int i, tries;
-    if (uname(&u) || !strncmp(u.release, "2.6.", 4)) return;      /* the rescue kernel: never */
-    if (getenv("NANDIO_INSTALL")) return;                          /* asked for on the kernel command line */
-    /* which partition: the last root=/dev/mtdblockN of the kernel command line (the kernel for
-     * the second slot names root1 there), else the one called root0 */
-    {
-        char cmd[1024]; FILE *f = fopen("/proc/cmdline", "r"); size_t n; char *p, *last = NULL;
-        if (f) {
-            n = fread(cmd, 1, sizeof cmd - 1, f); cmd[n] = 0; fclose(f);
-            for (p = cmd; (p = strstr(p, "root=/dev/mtdblock")); p += 5) last = p + 5;
-            if (last) sscanf(last, "%31[^ \n]", dev);
-        }
-    }
-    if (!dev[0]) {
-        if (load_parts()) return;
-        for (i = 0; i < nparts; i++)
-            if (!strcmp(parts[i].name, "root0")) snprintf(dev, sizeof dev, "/dev/mtdblock%s", parts[i].dev + strlen("/dev/mtd"));
-    }
-    if (!dev[0]) return;
+    int i, tries;
     mkdir("/newroot", 0755);
     /* the block device shows up a moment after the kernel has scanned the flash memory */
     for (tries = 0; tries < 50 && access(dev, F_OK); tries++) usleep(100000);
-    /* Look before mounting: an empty partition is not mounted at all. Mounted read-write on
-     * empty flash, jffs2 starts to write by itself; on this board that code has crashed in the
-     * kernel before, and the flash memory then stays locked: the installer's first write
-     * never came back (27 November 2026). So: no jffs2 start mark, no mount. */
-    {
-        char chr[32]; unsigned char head[2] = { 0xff, 0xff }; unsigned long off, erase = 0x20000, size = 0; int fd, found = 0;
-        snprintf(chr, sizeof chr, "/dev/mtd%s", dev + strlen("/dev/mtdblock"));
-        if (!load_parts()) for (i = 0; i < nparts; i++) if (!strcmp(parts[i].dev, chr)) { erase = parts[i].erasesize; size = parts[i].size; }
-        fd = open(chr, O_RDONLY);
-        if (fd < 0) return;
-        /* the mark (0x1985, either byte order) at the start of one of the first good blocks */
-        for (off = 0; off < size && off < 8 * erase && !found; off += erase) {
-            long long o = (long long)off;
-            if (ioctl(fd, MEMGETBADBLOCK, &o) > 0) continue;
-            if (pread(fd, head, 2, (off_t)off) == 2 && ((head[0] == 0x85 && head[1] == 0x19) || (head[0] == 0x19 && head[1] == 0x85))) found = 1;
-        }
-        close(fd);
-        if (!found) return;
-    }
+    if (!has_system_mark(dev)) return;
     /* read-only, as the kernel itself mounts a root file system; the system remounts it */
     if (mount(dev, "/newroot", "jffs2", MS_RDONLY, NULL)) return;
     for (i = 0; inits[i]; i++) {
@@ -721,6 +772,34 @@ static void boot_system(void)
     execl(inits[i], inits[i], (char *)NULL);
     /* not reached when it worked; when it did not, there is nothing sane to fall back to */
     for (;;) sleep(60);
+}
+static void boot_system(void)
+{
+    char slot[2][32] = { "", "" }, dev[32] = ""; struct utsname u; int i, first = 0, pick;
+    if (uname(&u) || !strncmp(u.release, "2.6.", 4)) return;      /* the rescue kernel: never */
+    if (getenv("NANDIO_INSTALL")) return;                          /* asked for on the kernel command line */
+    if (load_parts()) return;
+    for (i = 0; i < nparts; i++) {
+        if (!strcmp(parts[i].name, "root0")) snprintf(slot[0], sizeof slot[0], "/dev/mtdblock%s", parts[i].dev + strlen("/dev/mtd"));
+        if (!strcmp(parts[i].name, "root1")) snprintf(slot[1], sizeof slot[1], "/dev/mtdblock%s", parts[i].dev + strlen("/dev/mtd"));
+    }
+    /* without a record: the last root=/dev/mtdblockN of the kernel command line (the kernel for
+     * the second slot names root1 there), else root0 */
+    {
+        char cmd[1024]; FILE *f = fopen("/proc/cmdline", "r"); size_t n; char *p, *last = NULL;
+        if (f) {
+            n = fread(cmd, 1, sizeof cmd - 1, f); cmd[n] = 0; fclose(f);
+            for (p = cmd; (p = strstr(p, "root=/dev/mtdblock")); p += 5) last = p + 5;
+            if (last) sscanf(last, "%31[^ \n]", dev);
+        }
+    }
+    if (dev[0] && slot[1][0] && !strcmp(dev, slot[1])) first = 1;
+    pick = slot_pick();
+    if (pick >= 0 && slot[pick][0]) first = pick;
+    /* the chosen one; when there is no system in it, the other one, before giving up */
+    if (slot[first][0]) start_from(slot[first]);
+    else if (dev[0]) start_from(dev);
+    if (slot[!first][0]) { load_parts(); start_from(slot[!first]); }
 }
 int main(int argc, char **argv)
 {
@@ -817,6 +896,17 @@ int main(int argc, char **argv)
         else if (!strcmp(cmd, "READ") && k >= 2) cmd_read(a);
         else if (!strcmp(cmd, "ERASE") && k >= 2) cmd_erase(a);
         else if (!strcmp(cmd, "CHECK") && k >= 2) cmd_check(a);
+        else if (!strcmp(cmd, "SLOT")) {
+            if (!nparts) load_parts();
+            /* SLOT: the record as it is. SLOT pick: what a start would do now (it counts a
+             * trial down). SLOT set <active> <try|-> <left>: write a record. For tests and repair. */
+            struct slot_rec r; char w[16] = "", t[8] = "-"; int ac = 0, le = 0;
+            int m = sscanf(line, "%*s %15s %d %7s %d", w, &ac, t, &le);
+            if (m >= 1 && !strcmp(w, "pick")) say("OK %d", slot_pick());
+            else if (m == 4 && !strcmp(w, "set")) { r.active = ac; r.trial = t[0] == '-' ? -1 : atoi(t); r.left = le; say(slot_write(&r) ? "ERR write" : "OK"); }
+            else if (slot_read(&r)) say("OK none");
+            else say("OK active=%d try=%d left=%d", r.active, r.trial, r.left);
+        }
         else if (!strcmp(cmd, "GET") || !strcmp(cmd, "PUT")) {
             char part[64] = "", path[160] = ""; unsigned long len = 0;
             int m = sscanf(line, "%*s %63s %159s %lu", part, path, &len);

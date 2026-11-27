@@ -1,0 +1,10 @@
+[Unit]
+Description=J49 update: look for a newer version once a day
+# j49-update check does nothing unless the owner switched checking on.
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1d
+
+[Install]
+WantedBy=timers.target

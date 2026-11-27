@@ -15,6 +15,7 @@ FILESEXTRAPATHS:prepend := "${THISDIR}/../../../tools:${THISDIR}/files:"
 SRC_URI = "file://j49-screen/Cargo.toml \
            file://j49-screen/Cargo.lock \
            file://j49-screen/src/main.rs \
+           file://j49-screen/src/lib.rs \
            file://lang/en.txt \
            file://lang/nl.txt \
            file://themes/default.theme \

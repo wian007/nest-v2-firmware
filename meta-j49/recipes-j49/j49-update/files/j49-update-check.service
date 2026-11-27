@@ -1,0 +1,7 @@
+[Unit]
+Description=J49 update: look for a newer version (only when check=on in /var/lib/j49/update)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/j49-update check

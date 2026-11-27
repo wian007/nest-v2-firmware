@@ -151,6 +151,9 @@ button.danger{border-color:var(--red);color:var(--red)}
     <div class="step"><button data-min="min_on,-10" aria-label="shorter" data-ta="aria.shorter">−</button><span class="mono" id="d-mon"></span><button data-min="min_on,10" aria-label="longer" data-ta="aria.longer">+</button></div></div>
   <div class="row"><div class="what"><span data-t="sleep">Sleep</span><small id="d-sleep-n"></small></div>
     <div class="seg"><button id="sl-off" data-t="off">Off</button><button id="sl-on" data-t="on">On</button></div></div>
+  <div class="row" id="upd-row" hidden><div class="what"><span data-t="upd">Updates</span><small id="d-upd-n"></small></div>
+    <div class="seg"><button id="up-off" data-t="off">Off</button><button id="up-on" data-t="on">On</button></div></div>
+  <div class="actions" id="upd-actions" hidden><button id="up-check" data-t="upd.check">Look for a new version</button><button id="up-install" data-t="upd.install" hidden>Install</button></div>
   <div class="row" id="ring-row" hidden><div class="what"><span data-t="ringrev">Ring counts per menu turn</span><small id="d-ring-n"></small></div>
     <div class="step"><input id="d-ring" inputmode="numeric" style="width:90px" aria-label="ring counts" data-ta="aria.ringrev"><button id="d-ring-save" style="width:auto;font-size:inherit;padding:0 12px" data-t="set">Set</button></div></div>
 
@@ -397,6 +400,13 @@ $("w-add").onclick = async () => {
   const body = "ssid=" + $("w-ssid").value.trim() + "\npassword=" + $("w-pass").value + "\nswitch=" + (sw ? 1 : 0) + "\n";
   try { st = await api("POST", "/api/wifi", body); $("w-ssid").value = $("w-pass").value = ""; $("w-switch").checked = false; wifiDirty = false; paint(); say(T("wifi.saved"), "ok"); } catch (e) { say(e.message, "err"); }
 };
+$("up-off").onclick = () => dev("update_check=off");
+$("up-on").onclick = () => dev("update_check=on");
+$("up-check").onclick = async () => { try { await api("POST", "/api/update-check", ""); say(T("upd.looking"), "ok"); } catch (e) { say(e.message, "err"); } };
+$("up-install").onclick = async () => {
+  if (!confirm(T("upd.ask"))) return;
+  try { await api("POST", "/api/update-install", ""); say(T("upd.started"), "ok"); } catch (e) { say(e.message, "err"); }
+};
 $("restart").onclick = async () => {
   if (!confirm(T("restart.ask"))) return;
   try { await api("POST", "/api/restart", ""); say(T("restart.done"), "ok"); } catch (e) { say(e.message, "err"); }
@@ -408,10 +418,20 @@ function paintDevice() {
   $("d-off").textContent = (num(d.offset, 0) > 0 ? "+" : "") + dec(num(d.offset, 0)) + "°";
   const moff = Math.round(num(d.min_off, 180)), mon = Math.round(num(d.min_on, 60));
   $("d-moff").textContent = moff + " s"; $("d-mon").textContent = mon + " s";
-  $("k-valve").classList.toggle("on", moff === 30 && mon === 0); $("k-boiler").classList.toggle("on", moff === 180 && mon === 60);
+  $("k-valve").classList.toggle("on", moff === 10 && mon === 0); $("k-boiler").classList.toggle("on", moff === 180 && mon === 60);
   $("d-kind-n").textContent = T("kind.help");
   // only a screen with a carousel uses the ring counts per turn
   $("ring-row").hidden = !(d.caps || "").split(" ").includes("carousel");
+  // updates: only shown when an address is set on the device
+  const hasUpd = !!d.upd_url;
+  $("upd-row").hidden = $("upd-actions").hidden = !hasUpd;
+  if (hasUpd) {
+    $("up-off").classList.toggle("on", d.upd_check !== "on"); $("up-on").classList.toggle("on", d.upd_check === "on");
+    const newer = d.upd_latest && d.upd_latest !== d.commit_date && d.upd_latest !== d.version;
+    $("up-install").hidden = !newer || !!d.upd_busy;
+    $("d-upd-n").textContent = d.upd_busy ? T("upd.busy") + " (" + d.upd_busy + ")" : d.upd_error ? T("upd.error") + ": " + d.upd_error :
+      newer ? T("upd.newer") + ": " + d.upd_latest : d.upd_latest ? T("upd.current") : (d.upd_check === "on" ? T("upd.daily") : T("upd.manual"));
+  }
   const son = d.sleep === "on";
   $("sl-off").classList.toggle("on", !son); $("sl-on").classList.toggle("on", son);
   const why = {disabled: "", "screen-on": T("why.screen"), heat: T("why.heat"), ssh: T("why.ssh"), web: T("why.web"), login: T("why.login"), boot: T("why.boot"), "just-woke": T("why.just_woke"), bpd: T("why.bpd"), mqtt: T("why.mqtt"), wifi: T("why.wifi")}[d.sleep_why] || d.sleep_why;

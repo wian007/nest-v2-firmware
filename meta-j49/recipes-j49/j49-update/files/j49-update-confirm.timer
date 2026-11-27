@@ -1,0 +1,9 @@
+[Unit]
+Description=J49 update: confirm the running system two minutes after start
+# A new system that does not get this far is not confirmed: the next start is the old one again.
+
+[Timer]
+OnBootSec=2min
+
+[Install]
+WantedBy=timers.target

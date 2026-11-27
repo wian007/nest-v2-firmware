@@ -1,0 +1,14 @@
+[package]
+name = "j49-update"
+version = "0.1.0"
+edition = "2021"
+description = "Update of the J49 root file system over the network: writes the other slot, asks for a trial start, confirms"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

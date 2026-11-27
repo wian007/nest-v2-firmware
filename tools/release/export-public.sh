@@ -15,6 +15,7 @@ mkdir -p "$OUT"
 EXCLUDE=(
     tools/night-check.sh             # checks one home network
     tools/j49-ui                     # desktop emulator: its own repository
+    kas/nest-j49-robot.yml           # the private image with the robot screen
 )
 args=()
 for e in "${EXCLUDE[@]}"; do args+=(":(exclude)$e"); done

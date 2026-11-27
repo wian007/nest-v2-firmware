@@ -184,6 +184,52 @@ routers usually answer NTP without announcing it over DHCP). Another server: a f
 in `/etc/systemd/timesyncd.conf.d/`.
 
 
+### A skin of your own
+
+A theme changes colours and fonts. When the screens themselves must be different (another
+home screen, another menu), write a skin: a small Rust program that uses `j49-screen` as a
+library and replaces only what it wants different. The ring, the settings and thermostat files,
+languages, themes, the web login question, the WiFi setup page, sleeping and the tunes stay the
+code of `j49-screen`, so a skin follows the app when that changes.
+
+    // Cargo.toml:  j49-screen = { path = "../j49-screen" }
+    use j49_screen::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    struct Mine;
+    impl Skin for Mine {
+        // the frame of a page; None = the public one
+        fn render(&self, page: usize, _t: f32) -> Option<Fb> {
+            if page != P_DIAL {
+                return None;
+            }
+            let mut fb = Fb::new();
+            fb.text_center(160, 150, &fmt_temp(SETPOINT_X10.load(Ordering::Relaxed) as f32 / 10.0), 5, c::accent());
+            Some(fb)
+        }
+    }
+    fn main() {
+        run(&Mine);
+    }
+
+`Skin` (top of `tools/j49-screen/src/lib.rs`) has these methods, each with a default that is the
+public look:
+
+| Method | For |
+|---|---|
+| `render(page, t)` | the frame of a page (`P_DIAL`, `P_MENU`, `P_STATUS`, `P_SETTINGS`, `P_CONFIRM`, `P_WIFI`, `P_INSTALL`, `P_SPLASH`, or a page of your own from `P_SKIN` up); `t` = seconds the screen has been lit, for animation |
+| `click(page)`, `turn(page, step)` | a click and a step of the ring on the page shown; return true when handled |
+| `ring(page, counts)` | the raw counts of the ring, for something that follows it smoothly (a carousel) |
+| `fps(page)` | frames per second, for a page that animates |
+| `command(line)` | a command of your own on `/run/j49-screen.fifo` |
+| `caps()` | what the screen can do, for `j49-mqtt` (`/run/j49-screen.caps`) |
+| `screen(name)` | a page of your own for `--screen <name>` |
+| `start(once)` | called once before the first frame |
+
+Keep the program name `j49-screen` and the service: the web page and `j49-mqtt` only know the
+files. Test on a PC with `--fb <file> --screen <name> --once` (a 320x320 BGRA file) and
+`J49_DEMO=1`.
+
 ## Home Assistant (j49-mqtt)
 
 `j49-mqtt` (`tools/j49-mqtt`, service `j49-mqtt.service`) connects the files above to an MQTT
@@ -200,7 +246,7 @@ port=1883
 user=<mqtt user>
 password=<mqtt password>
 # optional: name=<name in Home Assistant>   prefix=<topic prefix>
-#           discovery=homeassistant   keepalive=60
+#           discovery=homeassistant   keepalive=600
 ```
 
 **More than one device on a broker.** Without `prefix=` the topics start with
@@ -210,9 +256,9 @@ whose file says `prefix=j49` keeps that; the tables below write `j49/` for the p
 entry in Home Assistant carries the MAC address, and there are two diagnostic sensors,
 "MAC-adres" and "IP-adres" (`id/mac`, `id/ip`). The name can be set on the web page.
 
-`keepalive` is the MQTT keep-alive in seconds (at least 10, default 60): `j49-mqtt` pings at half
-of it and the broker declares the device offline after 1.5 times. A long value (3600) is for the
-day the head unit sleeps between messages.
+`keepalive` is the MQTT keep-alive in seconds (at least 10, default 600): `j49-mqtt` pings at half
+of it and the broker declares the device offline after 1.5 times, so 15 minutes with the default.
+It is long because the thermostat sleeps at most 0.8 of it at a time.
 
 The session is persistent (no "clean session") and commands are taken with QoS 1; the discovery
 entries carry `"qos":1`, so Home Assistant sends its commands that way. A command sent while the

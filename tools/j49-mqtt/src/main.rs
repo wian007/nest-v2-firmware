@@ -498,7 +498,7 @@ fn read_cfg() -> Option<Cfg> {
         prefix: m.get("prefix").cloned().filter(|s| !s.is_empty()).unwrap_or_else(default_prefix),
         name: m.get("name").cloned().filter(|s| !s.is_empty()).unwrap_or_else(default_name),
         discovery: m.get("discovery").cloned().filter(|s| !s.is_empty()).unwrap_or_else(|| "homeassistant".into()),
-        keepalive: m.get("keepalive").and_then(|s| s.parse::<u16>().ok()).filter(|k| *k >= 10).unwrap_or(60),
+        keepalive: m.get("keepalive").and_then(|s| s.parse::<u16>().ok()).filter(|k| *k >= 10).unwrap_or(600), // long: the thermostat sleeps between pings (j49-sleep wakes for them)
     })
 }
 /// Every state topic (relative to the prefix) with its current value.

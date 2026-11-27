@@ -194,7 +194,24 @@ fn stamp(start: Instant) -> String {
 /// until `duration` elapses (None = forever).
 /// Latest SHT20 reading for other programs (j49-screen): /run/bpd/sht20
 /// ("temp=21.34\nrh=45.10\nt=<unix seconds>\n"). Written atomically via a temp file.
+/// The backplate's state frame 0x000b carries its voltages: /run/bpd/power
+/// ("vin=<V>\nvop=<V>\nvbat=<V>\nraw=<hex>\nt=<unix seconds>\n"). Offsets and scaling are from the
+/// cuckoo-nest wiki (Vin u16 at 8, /100; Vop at 10 and Vbat at 12, /1000); the raw bytes are kept
+/// next to them until that is confirmed on our backplate.
+fn publish_power(f: &Frame) {
+    if f.ty != 0x000b || f.payload.len() < 14 || !f.crc_ok {
+        return;
+    }
+    let u = |i: usize| u16::from_le_bytes([f.payload[i], f.payload[i + 1]]) as f32;
+    let raw: String = f.payload.iter().map(|b| format!("{b:02x}")).collect();
+    let _ = std::fs::create_dir_all("/run/bpd");
+    let tmp = "/run/bpd/power.tmp";
+    if std::fs::write(tmp, format!("vin={:.2}\nvop={:.3}\nvbat={:.3}\nraw={raw}\nt={}\n", u(8) / 100.0, u(10) / 1000.0, u(12) / 1000.0, unix_now())).is_ok() {
+        let _ = std::fs::rename(tmp, "/run/bpd/power");
+    }
+}
 fn publish_sht20(f: &Frame) {
+    publish_power(f);
     if f.ty != TYPE_SHT20 || f.payload.len() != 4 || !f.crc_ok {
         return;
     }

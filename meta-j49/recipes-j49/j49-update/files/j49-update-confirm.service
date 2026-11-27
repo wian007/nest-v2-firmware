@@ -1,0 +1,6 @@
+[Unit]
+Description=J49 update: this system came up, make it the active one (j49-update confirm)
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/j49-update confirm

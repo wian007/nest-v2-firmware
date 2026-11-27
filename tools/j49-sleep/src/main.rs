@@ -14,7 +14,10 @@
 // records what woke the board.
 //
 // Settings in /var/lib/j49/sleep (key=value): enabled=on|off, idle=<s awake after a wake, 20>,
-// max=<longest sleep in s, 1500>, motion=on|off (wake on movement, on).
+// max=<longest sleep in s, 1500>, motion=near|on|off: what movement wakes the head unit.
+// near (the default): only somebody close to the thermostat (the near sensor). on: also movement
+// anywhere in the room (the far sensor), which on a wall in a living room is most of the evening.
+// off: no movement at all, only the ring.
 use std::collections::HashMap;
 use std::process::Command;
 use std::time::{Duration, Instant, SystemTime};
@@ -56,7 +59,8 @@ struct Cfg {
     enabled: bool,
     idle: u64,
     max: u64,
-    motion: bool,
+    motion: bool,     // any movement sensor wakes
+    motion_far: bool, // also the far one (the whole room)
 }
 fn read_cfg() -> Cfg {
     let m = kv(SETTINGS);
@@ -65,6 +69,7 @@ fn read_cfg() -> Cfg {
         idle: num(&m, "idle").unwrap_or(20).clamp(10, 600),
         max: num(&m, "max").unwrap_or(1500).clamp(30, 1500),
         motion: m.get("motion").map(|v| v != "off").unwrap_or(true),
+        motion_far: m.get("motion").map(|v| v == "on").unwrap_or(false),
     }
 }
 fn set_enabled(on: bool) {
@@ -98,7 +103,7 @@ fn ssh_sessions() -> usize {
 fn mqtt_keepalive() -> Option<u64> {
     let m = kv("/var/lib/j49/mqtt.conf");
     m.get("host").filter(|h| !h.is_empty())?;
-    Some(num(&m, "keepalive").filter(|k| *k >= 10).unwrap_or(60))
+    Some(num(&m, "keepalive").filter(|k| *k >= 10).unwrap_or(600)) // the default of j49-mqtt
 }
 
 /// Why the head unit must stay awake now (a short key), or None and how long it may sleep.
@@ -241,7 +246,7 @@ fn sleep_once(c: &Cfg, secs: u64) -> Option<(u64, String)> {
     if backplate {
         let mut mask = WAKE_TIMER | WAKE_TEMPERATURE;
         if c.motion {
-            mask |= WAKE_PIR | WAKE_NEAR_PIR;
+            mask |= WAKE_NEAR_PIR | if c.motion_far { WAKE_PIR } else { 0 };
         }
         let _ = std::fs::remove_file("/run/bpd/quiet-end");
         let _ = std::fs::write("/run/bpd/quiet-request", format!("{secs} {mask:04x}\n"));
@@ -330,7 +335,7 @@ fn main() {
         }
         Some("status") => {
             let c = read_cfg();
-            println!("enabled={} idle={} max={} motion={}", if c.enabled { "on" } else { "off" }, c.idle, c.max, if c.motion { "on" } else { "off" });
+            println!("enabled={} idle={} max={} motion={}", if c.enabled { "on" } else { "off" }, c.idle, c.max, if !c.motion { "off" } else if c.motion_far { "on" } else { "near" });
             print!("{}", std::fs::read_to_string(STATE).unwrap_or_else(|_| "the service is not running\n".into()));
         }
         _ => {

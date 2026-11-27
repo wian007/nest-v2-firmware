@@ -400,6 +400,7 @@ fn check_device(body: &str) -> Result<Vec<(&'static str, &'static str, String)>,
             "sleep" => ("/var/lib/j49/sleep", "enabled", (v == "on" || v == "off").then(|| v.clone())),
             "min_off" => ("/var/lib/j49/thermostat", "min_off", int(0, 600)),
             "min_on" => ("/var/lib/j49/thermostat", "min_on", int(0, 600)),
+            "update_check" => ("/var/lib/j49/update", "check", (v == "on" || v == "off").then(|| v.clone())),
             _ => return Err(format!("{}: {k}", tw("err.unknown_setting"))),
         };
         out.push((file, key, val.ok_or(format!("{} {key}", tw("err.bad_value")))?));
@@ -658,7 +659,7 @@ fn device_json() -> String {
     let nets: Vec<String> =
         wifi_saved().iter().map(|n| format!("{{\"ssid\":{},\"current\":{}}}", json_str(n), *n == wssid)).collect();
     format!(
-        "{{\"brightness\":{},\"volume\":{},\"ringrev\":{},\"cards\":6,\"caps\":{},\"font\":{},\"sleep\":{},\"sleep_state\":{},\"sleep_why\":{},\"sleeps\":{},\"last_slept\":{},\"last_wake\":{},\"offset\":{},\"min_off\":{},\"min_on\":{},\"commit\":{},\"dirty\":{},\"commit_date\":{},\
+        "{{\"brightness\":{},\"volume\":{},\"ringrev\":{},\"cards\":6,\"caps\":{},\"font\":{},\"sleep\":{},\"sleep_state\":{},\"sleep_why\":{},\"sleeps\":{},\"last_slept\":{},\"last_wake\":{},\"upd_check\":{},\"upd_url\":{},\"upd_latest\":{},\"upd_busy\":{},\"upd_error\":{},\"offset\":{},\"min_off\":{},\"min_on\":{},\"commit\":{},\"dirty\":{},\"commit_date\":{},\
 \"built\":{},\"kernel\":{},\"uptime\":{uptime},\"ip\":{},\"mac\":{},\"wifi_state\":{},\"wifi_ssid\":{},\"networks\":[{}]}}",
         g(&sc, "brightness", "100"),
         g(&sc, "volume", "5"),
@@ -671,6 +672,11 @@ fn device_json() -> String {
         g(&kv("/run/j49-sleep.state"), "sleeps", "0"),
         g(&kv("/run/j49-sleep.state"), "last_slept", "0"),
         g(&kv("/run/j49-sleep.state"), "last_wake", ""),
+        g(&kv("/var/lib/j49/update"), "check", "off"),
+        g(&kv("/var/lib/j49/update"), "url", ""),
+        g(&kv("/run/j49-update.state"), "latest", ""),
+        g(&kv("/run/j49-update.state"), "busy", ""),
+        g(&kv("/run/j49-update.state"), "error", ""),
         g(&th, "offset", "-2.0"),
         g(&th, "min_off", "10"),
         g(&th, "min_on", "0"),
@@ -1024,6 +1030,17 @@ fn handle(mut s: TcpStream) {
             Ok(()) => json(&mut s, "200 OK", &state_json()),
             Err(e) => msg(&mut s, "400 Bad Request", &e),
         },
+        // Updates (j49-update): looking is one order, installing another. Both run on their own,
+        // outside this service: an install ends in a restart.
+        ("POST", "/api/update-check") => {
+            let _ = std::process::Command::new("systemd-run").args(["--quiet", "--collect", "/usr/bin/j49-update", "check", "--now"]).status();
+            msg(&mut s, "200 OK", "ok");
+        }
+        ("POST", "/api/update-install") => {
+            eprintln!("update asked from the page");
+            let _ = std::process::Command::new("systemd-run").args(["--quiet", "--collect", "/usr/bin/j49-update", "install"]).status();
+            msg(&mut s, "200 OK", "ok");
+        }
         ("POST", "/api/restart") => {
             eprintln!("restart asked from the page");
             msg(&mut s, "200 OK", tw("restart.done.lower"));

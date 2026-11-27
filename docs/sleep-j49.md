@@ -114,7 +114,11 @@ the saving, since PER and CORE still do not reach retention.
 
 `tools/j49-sleep`, service `j49-sleep.service`. **On unless switched off** (since 27 November 2026; before that it was off unless enabled): `j49-sleep on|off|status`,
 the switch "Slapen" on the web page, or the MQTT switch "Slapen toegestaan"
-(`/var/lib/j49/sleep`: `enabled=`, `idle=` 20 s, `max=` 1500 s, `motion=` on).
+(`/var/lib/j49/sleep`: `enabled=`, `idle=` 20 s, `max=` 1500 s, `motion=` near).
+`motion=near` (the default since 27 November 2026) wakes the head unit only for the near
+movement sensor, `on` also for the far one (the whole room), `off` for neither. With `on`, a
+thermostat in a living room was woken every few seconds to a minute for as long as somebody was
+in the room. What the stock firmware asks the backplate for when it sleeps was not captured.
 
 It suspends only when all of this holds: enabled; up for 2 minutes; awake for `idle` seconds; the
 panel is asleep; `bpd` reports no heat demand, no relay on and no waiting time; no SSH session
@@ -129,12 +133,12 @@ the real backplate).
 
 How long: `max`, but at most 300 s while the mode is "heat" (the control loop has to look again),
 and at most 0.8 of the MQTT keep-alive (the broker gives up at 1.5 times; `j49-mqtt` pings at
-once after a wake). With the default keep-alive of 60 s that is 48 s, so `keepalive=600` is set in
-`mqtt.conf` on the device.
+once after a wake). The default keep-alive is 600 s (480 s of sleep at most) since 27 November
+2026; with the 60 s it was before, a thermostat with a broker set woke every 48 s.
 
 One sleep: wake patterns into the WiFi chip (MQTT broker, port 80, port 22); ttyS2 wake-up on;
 when the backplate is there, a quiet request to `bpd` with wake mask timer + temperature (+ PIR
-and near-PIR when `motion=on`), and it waits for `/run/bpd/quiet`; RTC alarm as the safety net;
+near-PIR unless `motion=off`, and PIR when `motion=on`), and it waits for `/run/bpd/quiet`; RTC alarm as the safety net;
 "asleep" in the state file and 2.6 s for `j49-mqtt` to send it; `mem`. After the wake it writes
 `/run/bpd/quiet-end` (bpd talks again) and records the wake interrupt: `backplate`, `wifi` (the
 GPIO bank of the WL1271; the ring sensor is on it too) or `timer`.

@@ -61,10 +61,11 @@ with tempfile.TemporaryDirectory() as d:
     rnd = lambda n: os.urandom(n)
     spl = rnd(ERASE) + b"\xff" * ERASE + rnd(ERASE) + b"\xff" * ERASE          # 4 blocks, 2 empty
     cfg = rnd(ERASE) + b"BADBLOCK" + b"\0" * (ERASE - 8) + rnd(ERASE)           # block 1 is bad
-    open(d + "/mtd", "w").write('dev:    size   erasesize  name\nmtd0: %08x 00020000 "nand0"\nmtd2: %08x 00020000 "spl0"\nmtd9: %08x 00020000 "system-config"\n' % (7 * ERASE, 4 * ERASE, 3 * ERASE))
+    open(d + "/mtd", "w").write('dev:    size   erasesize  name\nmtd0: %08x 00020000 "nand0"\nmtd2: %08x 00020000 "spl0"\nmtd9: %08x 00020000 "system-config"\nmtd5: %08x 00020000 "env1"\n' % (7 * ERASE, 4 * ERASE, 3 * ERASE, 3 * ERASE))
     open(d + "/nand0", "wb").write(b"\xff" * 7 * ERASE)
     open(d + "/spl0", "wb").write(spl)
     open(d + "/system-config", "wb").write(cfg)
+    open(d + "/env1", "wb").write(b"\xff" * 3 * ERASE)
     p = start(d)
     assert line(p) == "J49NANDIO 1"           # the banner, once a second until a command comes
     cmd(p, "INFO")
@@ -73,7 +74,7 @@ with tempfile.TemporaryDirectory() as d:
         l = line(p)
         if l == "OK": break
         if l.startswith("MTD"): info.append(l)
-    assert info == ["MTD nand0 %d %d" % (7 * ERASE, ERASE), "MTD spl0 %d %d" % (4 * ERASE, ERASE), "MTD system-config %d %d" % (3 * ERASE, ERASE)], info
+    assert info == ["MTD nand0 %d %d" % (7 * ERASE, ERASE), "MTD spl0 %d %d" % (4 * ERASE, ERASE), "MTD system-config %d %d" % (3 * ERASE, ERASE), "MTD env1 %d %d" % (3 * ERASE, ERASE)], info
 
     b = read_part(p, "spl0")
     assert [k for k, _ in b] == ["D", "E", "D", "E"] and b[0][1] == spl[:ERASE] and b[2][1] == spl[2 * ERASE:3 * ERASE]
@@ -110,6 +111,16 @@ with tempfile.TemporaryDirectory() as d:
     cmd(p, "GET system-config a/b/wl.bin"); r = line(p); assert r == "DATA 912", r
     assert p.stdout.read(912) == nvs and line(p).startswith("SUM") and line(p) == "OK"
     cmd(p, "CHECK spl0"); r = line(p); assert r.startswith("OK ") and r.split()[2] == "0", r
+    # which system starts: no record, a trial that counts down, a trial never confirmed, a confirmed one
+    def one(c):
+        cmd(p, c); return line(p)
+    assert one("SLOT") == "OK none" and one("SLOT pick") == "OK -1"
+    assert one("SLOT set 0 1 2") == "OK" and one("SLOT") == "OK active=0 try=1 left=2"
+    assert one("SLOT pick") == "OK 1" and one("SLOT pick") == "OK 1"          # two tries on the new one
+    assert one("SLOT pick") == "OK 0" and one("SLOT") == "OK active=0 try=-1 left=0"   # then the old one, for good
+    assert one("SLOT set 1 - 0") == "OK" and one("SLOT pick") == "OK 1" and one("SLOT pick") == "OK 1"
+    raw = open(d + "/env1", "r+b"); raw.seek(20); raw.write(b"X"); raw.close()      # a damaged record counts as none
+    assert one("SLOT") == "OK none"
     for bad in ["GET system-config nope", "GET system-config ../mtd", "GET nope x", "PUT system-config x 0", "GET system-config"]:
         cmd(p, bad); r = line(p); assert r.startswith("ERR"), (bad, r)
     for bad in ["WRITE spl0 100 shift", "WRITE nope %d shift" % ERASE, "WRITE spl0 %d sideways" % ERASE, "WRITE spl0 %d shift" % (5 * ERASE), "READ nope", "FLY"]:
