@@ -36,6 +36,10 @@ project.
 
 | File | Size | sha256 |
 |---|---|---|
+| `j49-image-nest-j49.rootfs.jffs2` | 21102816 | `6d2f664b287077e6649662baccffbdbfbae8bc77381e820f6024574619cec2e9` |
 | `nest-service-uImage` | 2827820 | `94b3489173572e763dde29169c14cfa64309446e13d71432cc6bb39f071160bc` |
 | `u-boot.bin` | 246572 | `52aa039f5b36d8cd5108e6bbb69f5dbd60a5c3750404c8d3fbc721d53721ccf0` |
+| `u-boot-nest-j49.uimg` | 548584 | `ae7a0fd748eb7671626593a56a00396f8494296d0f76a4f2528f29444d221cd2` |
+| `uImage-j49-a` | 4893677 | `11d6fad716d571d5ceeb06d80d91f9f49b3aa63e5ffcdf2c5013b039ebe8f15d` |
 | `x-load.bin` | 27876 | `aee635f0d09180677fa86fea6797b1ad36f64b112f7eea3a5572ab7f28fd5c21` |
+| `zImage-installer` | 6374161 | `8b217558a89c0ac5b0b03174c23ce861d96fdf10ba0ebb4036708c3032739bbe` |
