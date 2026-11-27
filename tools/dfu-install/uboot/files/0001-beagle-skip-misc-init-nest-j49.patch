@@ -1,0 +1,61 @@
+From: dfu-install
+Subject: [PATCH] beagle: optional skip of beagle hardware probing (Nest J49)
+
+The Nest J49 reuses the beagle target for its DFU installer bootloader,
+but none of the beagle expansion hardware exists on the thermostat:
+misc_init_r() probes the expansion EEPROM over I2C, drives the TWL4030
+LED pins and writes beagle gpio6 bits 1/2/8/10/23 -- unknown wiring on
+the J49. With CONFIG_NEST_J49_SKIP_BEAGLE_MISC=y the function is a no-op.
+
+--- a/board/beagle/beagle/beagle.c
++++ b/board/beagle/beagle/beagle.c
+@@ -248,6 +248,24 @@
+  * Routine: misc_init_r
+  * Description: Configure board specific parts
+  */
++#if defined(CONFIG_NEST_J49_SKIP_BEAGLE_MISC)
++/*
++ * Nest J49: the beagle expansion hardware this function probes does not
++ * exist on this board (expansion EEPROM, TWL4030 LEDs, beagle gpio6 pins;
++ * see board/beagle/beagle/Kconfig).
++ */
++int misc_init_r(void)
++{
++	/* the TWL4030 power/USB-LDO setup is still needed: without it the
++	 * MUSB gadget never enumerates (no 0451:df10) */
++	twl4030_power_init();
++	/* cold boot: the PHY clock must run before MUSB does its soft reset
++	 * (a ROM USB push leaves the PHY up, a NAND boot does not) */
++	twl4030_usb_ulpi_init();
++	return 0;
++}
++#else
+ int misc_init_r(void)
+ {
+ 	struct gpio *gpio5_base = (struct gpio *)OMAP34XX_GPIO5_BASE;
+@@ -442,6 +453,8 @@
+ 	return 0;
+ }
+ 
++#endif
++
+ /*
+  * Routine: set_muxconf_regs
+  * Description: Setting up the configuration Mux registers specific to the
+--- a/board/beagle/beagle/Kconfig
++++ b/board/beagle/beagle/Kconfig
+@@ -9,4 +9,14 @@
+ config SYS_CONFIG_NAME
+ 	default "omap3_beagle"
+ 
++config NEST_J49_SKIP_BEAGLE_MISC
++	bool "Skip beagle hardware probing (Nest J49 installer build)"
++	default n
++	help
++	  The Nest J49 boots the beagle target as the DFU installer's
++	  bootloader but has none of the beagle expansion hardware:
++	  misc_init_r would probe the expansion EEPROM over I2C, drive the
++	  TWL4030 LED pins and write beagle gpio6 bits 1/2/8/10/23 -- all
++	  unknown wiring on the J49. Skip it.
++
+ endif

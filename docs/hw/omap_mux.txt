@@ -1,0 +1,805 @@
+== board ==
+== cam_d0 ==
+name: cam_d0.safe_mode (0x48002116/0x0e6 = 0x130f), b ab18, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE7
+signals: cam_d0 | NA | NA | NA | gpio_99 | NA | NA | safe_mode
+== cam_d1 ==
+name: cam_d1.safe_mode (0x48002118/0x0e8 = 0x130f), b ac18, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE7
+signals: cam_d1 | NA | NA | NA | gpio_100 | NA | NA | safe_mode
+== cam_d10 ==
+name: cam_d10.gpio_109 (0x4800212a/0x0fa = 0x1604), b f21, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: cam_d10 | NA | NA | NA | gpio_109 | NA | NA | safe_mode
+== cam_d11 ==
+name: cam_d11.gpio_110 (0x4800212c/0x0fc = 0x0004), b g21, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE4
+signals: cam_d11 | NA | NA | NA | gpio_110 | NA | NA | safe_mode
+== cam_d2 ==
+name: cam_d2.gpio_101 (0x4800211a/0x0ea = 0x0004), b g19, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE4
+signals: cam_d2 | NA | NA | NA | gpio_101 | NA | NA | safe_mode
+== cam_d3 ==
+name: cam_d3.gpio_102 (0x4800211c/0x0ec = 0x771c), b f19, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE4
+signals: cam_d3 | NA | NA | NA | gpio_102 | NA | NA | safe_mode
+== cam_d4 ==
+name: cam_d4.gpio_103 (0x4800211e/0x0ee = 0x3604), b g20, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE4
+signals: cam_d4 | NA | NA | NA | gpio_103 | NA | NA | safe_mode
+== cam_d5 ==
+name: cam_d5.gpio_104 (0x48002120/0x0f0 = 0x0004), b b21, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE4
+signals: cam_d5 | NA | NA | NA | gpio_104 | NA | NA | safe_mode
+== cam_d6 ==
+name: cam_d6.gpio_105 (0x48002122/0x0f2 = 0x371c), b l24, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE4
+signals: cam_d6 | NA | NA | NA | gpio_105 | NA | NA | safe_mode
+== cam_d7 ==
+name: cam_d7.safe_mode (0x48002124/0x0f4 = 0x0107), b k24, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE7
+signals: cam_d7 | NA | NA | NA | gpio_106 | NA | NA | safe_mode
+== cam_d8 ==
+name: cam_d8.safe_mode (0x48002126/0x0f6 = 0x0107), b j23, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE7
+signals: cam_d8 | NA | NA | NA | gpio_107 | NA | NA | safe_mode
+== cam_d9 ==
+name: cam_d9.gpio_108 (0x48002128/0x0f8 = 0x4104), b k23, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE4
+signals: cam_d9 | NA | NA | NA | gpio_108 | NA | NA | safe_mode
+== cam_fld ==
+name: cam_fld.safe_mode (0x48002114/0x0e4 = 0x170f), b h24, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_fld | NA | cam_global_reset | NA | gpio_98 | NA | NA | safe_mode
+== cam_hs ==
+name: cam_hs.safe_mode (0x4800210c/0x0dc = 0x170f), b a22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_hs | NA | NA | NA | gpio_94 | NA | NA | safe_mode
+== cam_pclk ==
+name: cam_pclk.safe_mode (0x48002112/0x0e2 = 0x170f), b j19, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_pclk | NA | NA | NA | gpio_97 | NA | NA | safe_mode
+== cam_strobe ==
+name: cam_strobe.safe_mode (0x48002132/0x102 = 0x170f), b j20, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_strobe | NA | NA | NA | gpio_126 | NA | NA | safe_mode
+== cam_vs ==
+name: cam_vs.safe_mode (0x4800210e/0x0de = 0x170f), b e18, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_vs | NA | NA | NA | gpio_95 | NA | NA | safe_mode
+== cam_wen ==
+name: cam_wen.safe_mode (0x48002130/0x100 = 0x170f), b f18, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_wen | NA | cam_shutter | NA | gpio_167 | NA | NA | safe_mode
+== cam_xclka ==
+name: cam_xclka.safe_mode (0x48002110/0x0e0 = 0x170f), b b22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_xclka | NA | NA | NA | gpio_96 | NA | NA | safe_mode
+== cam_xclkb ==
+name: cam_xclkb.safe_mode (0x4800212e/0x0fe = 0x170f), b c22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: cam_xclkb | NA | NA | NA | gpio_111 | NA | NA | safe_mode
+== csi2_dx0 ==
+name: csi2_dx0.safe_mode (0x48002134/0x104 = 0x130f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE7
+signals: csi2_dx0 | NA | NA | NA | gpio_112 | NA | NA | safe_mode
+== csi2_dx1 ==
+name: csi2_dx1.safe_mode (0x48002138/0x108 = 0x130f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE7
+signals: csi2_dx1 | NA | NA | NA | gpio_114 | NA | NA | safe_mode
+== csi2_dy0 ==
+name: csi2_dy0.safe_mode (0x48002136/0x106 = 0x130f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE7
+signals: csi2_dy0 | NA | NA | NA | gpio_113 | NA | NA | safe_mode
+== csi2_dy1 ==
+name: csi2_dy1.safe_mode (0x4800213a/0x10a = 0x130f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE7
+signals: csi2_dy1 | NA | NA | NA | gpio_115 | NA | NA | safe_mode
+== dss_acbias ==
+name: dss_acbias.dss_acbias (0x480020da/0x0aa = 0x1708), b j21, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_acbias | NA | NA | NA | gpio_69 | NA | NA | safe_mode
+== dss_data0 ==
+name: dss_data0.dss_data0 (0x480020dc/0x0ac = 0x1708), b ac19, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data0 | NA | uart1_cts | NA | gpio_70 | NA | NA | safe_mode
+== dss_data1 ==
+name: dss_data1.dss_data1 (0x480020de/0x0ae = 0x1708), b ab19, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data1 | NA | uart1_rts | NA | gpio_71 | NA | NA | safe_mode
+== dss_data10 ==
+name: dss_data10.dss_data10 (0x480020f0/0x0c0 = 0x1708), b ac22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data10 | NA | NA | NA | gpio_80 | NA | NA | safe_mode
+== dss_data11 ==
+name: dss_data11.dss_data11 (0x480020f2/0x0c2 = 0x1708), b ac23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data11 | NA | NA | NA | gpio_81 | NA | NA | safe_mode
+== dss_data12 ==
+name: dss_data12.dss_data12 (0x480020f4/0x0c4 = 0x1708), b ab22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data12 | NA | NA | NA | gpio_82 | NA | NA | safe_mode
+== dss_data13 ==
+name: dss_data13.dss_data13 (0x480020f6/0x0c6 = 0x1708), b y22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data13 | NA | NA | NA | gpio_83 | NA | NA | safe_mode
+== dss_data14 ==
+name: dss_data14.dss_data14 (0x480020f8/0x0c8 = 0x1708), b w22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data14 | NA | NA | NA | gpio_84 | NA | NA | safe_mode
+== dss_data15 ==
+name: dss_data15.dss_data15 (0x480020fa/0x0ca = 0x1708), b v22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data15 | NA | NA | NA | gpio_85 | NA | NA | safe_mode
+== dss_data16 ==
+name: dss_data16.dss_data16 (0x480020fc/0x0cc = 0x1708), b j22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data16 | NA | NA | NA | gpio_86 | NA | NA | safe_mode
+== dss_data17 ==
+name: dss_data17.dss_data17 (0x480020fe/0x0ce = 0x1708), b g23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data17 | NA | NA | NA | gpio_87 | NA | NA | safe_mode
+== dss_data18 ==
+name: dss_data18.dss_data18 (0x48002100/0x0d0 = 0x1708), b g24, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data18 | NA | mcspi3_clk | dss_data0 | gpio_88 | NA | NA | safe_mode
+== dss_data19 ==
+name: dss_data19.dss_data19 (0x48002102/0x0d2 = 0x1708), b h23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data19 | NA | mcspi3_simo | dss_data1 | gpio_89 | NA | NA | safe_mode
+== dss_data2 ==
+name: dss_data2.dss_data2 (0x480020e0/0x0b0 = 0x1708), b ad20, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data2 | NA | NA | NA | gpio_72 | NA | NA | safe_mode
+== dss_data20 ==
+name: dss_data20.dss_data20 (0x48002104/0x0d4 = 0x1708), b d23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data20 | NA | mcspi3_somi | dss_data2 | gpio_90 | NA | NA | safe_mode
+== dss_data21 ==
+name: dss_data21.dss_data21 (0x48002106/0x0d6 = 0x1708), b k22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data21 | NA | mcspi3_cs0 | dss_data3 | gpio_91 | NA | NA | safe_mode
+== dss_data22 ==
+name: dss_data22.dss_data22 (0x48002108/0x0d8 = 0x1708), b v21, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data22 | NA | mcspi3_cs1 | dss_data4 | gpio_92 | NA | NA | safe_mode
+== dss_data23 ==
+name: dss_data23.dss_data23 (0x4800210a/0x0da = 0x1708), b w21, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data23 | NA | NA | dss_data5 | gpio_93 | NA | NA | safe_mode
+== dss_data3 ==
+name: dss_data3.dss_data3 (0x480020e2/0x0b2 = 0x1708), b ac20, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data3 | NA | NA | NA | gpio_73 | NA | NA | safe_mode
+== dss_data4 ==
+name: dss_data4.dss_data4 (0x480020e4/0x0b4 = 0x1708), b ad21, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data4 | NA | uart3_rx_irrx | NA | gpio_74 | NA | NA | safe_mode
+== dss_data5 ==
+name: dss_data5.dss_data5 (0x480020e6/0x0b6 = 0x1708), b ac21, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data5 | NA | uart3_tx_irtx | NA | gpio_75 | NA | NA | safe_mode
+== dss_data6 ==
+name: dss_data6.dss_data6 (0x480020e8/0x0b8 = 0x1708), b d24, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data6 | NA | uart1_tx | NA | gpio_76 | NA | NA | safe_mode
+== dss_data7 ==
+name: dss_data7.dss_data7 (0x480020ea/0x0ba = 0x1708), b e23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data7 | NA | uart1_rx | NA | gpio_77 | NA | NA | safe_mode
+== dss_data8 ==
+name: dss_data8.dss_data8 (0x480020ec/0x0bc = 0x1708), b e24, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data8 | NA | NA | NA | gpio_78 | NA | NA | safe_mode
+== dss_data9 ==
+name: dss_data9.dss_data9 (0x480020ee/0x0be = 0x1708), b f23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_data9 | NA | NA | NA | gpio_79 | NA | NA | safe_mode
+== dss_hsync ==
+name: dss_hsync.dss_hsync (0x480020d6/0x0a6 = 0x1708), b e22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_hsync | NA | NA | NA | gpio_67 | NA | NA | safe_mode
+== dss_pclk ==
+name: dss_pclk.dss_pclk (0x480020d4/0x0a4 = 0x1708), b g22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_pclk | NA | NA | NA | gpio_66 | NA | NA | safe_mode
+== dss_vsync ==
+name: dss_vsync.dss_vsync (0x480020d8/0x0a8 = 0x1708), b f22, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: dss_vsync | NA | NA | NA | gpio_68 | NA | NA | safe_mode
+== etk_clk ==
+name: etk_clk.gpio_12 (0x480025d8/0x5a8 = 0x170c), b ac1, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_clk | mcbsp5_clkx | sdmmc3_clk | hsusb1_stp | gpio_12 | mm1_rxdp | hsusb1_tll_stp | NA
+== etk_ctl ==
+name: etk_ctl.gpio_13 (0x480025da/0x5aa = 0x170c), b ad3, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_ctl | NA | sdmmc3_cmd | hsusb1_clk | gpio_13 | NA | hsusb1_tll_clk | NA
+== etk_d0 ==
+name: etk_d0.gpio_14 (0x480025dc/0x5ac = 0x170c), b ad6, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d0 | mcspi3_simo | sdmmc3_dat4 | hsusb1_data0 | gpio_14 | mm1_rxrcv | hsusb1_tll_data0 | NA
+== etk_d1 ==
+name: etk_d1.gpio_15 (0x480025de/0x5ae = 0x170c), b ac6, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d1 | mcspi3_somi | NA | hsusb1_data1 | gpio_15 | mm1_txse0 | hsusb1_tll_data1 | NA
+== etk_d10 ==
+name: etk_d10.gpio_24 (0x480025f0/0x5c0 = 0x170c), b ac3, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d10 | NA | uart1_rx | hsusb2_clk | gpio_24 | NA | hsusb2_tll_clk | NA
+== etk_d11 ==
+name: etk_d11.gpio_25 (0x480025f2/0x5c2 = 0x170c), b ac9, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d11 | NA | NA | hsusb2_stp | gpio_25 | mm2_rxdp | hsusb2_tll_stp | NA
+== etk_d12 ==
+name: etk_d12.gpio_26 (0x480025f4/0x5c4 = 0x170c), b ac10, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d12 | NA | NA | hsusb2_dir | gpio_26 | NA | hsusb2_tll_dir | NA
+== etk_d13 ==
+name: etk_d13.gpio_27 (0x480025f6/0x5c6 = 0x170c), b ad11, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d13 | NA | NA | hsusb2_nxt | gpio_27 | mm2_rxdm | hsusb2_tll_nxt | NA
+== etk_d14 ==
+name: etk_d14.(null) (0x480025f8/0x5c8 = 0x170f), b ac11, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: etk_d14 | NA | NA | hsusb2_data0 | gpio_28 | mm2_rxrcv | hsusb2_tll_data0 | NA
+== etk_d15 ==
+name: etk_d15.(null) (0x480025fa/0x5ca = 0x170f), b ad12, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: etk_d15 | NA | NA | hsusb2_data1 | gpio_29 | mm2_txse0 | hsusb2_tll_data1 | NA
+== etk_d2 ==
+name: etk_d2.gpio_16 (0x480025e0/0x5b0 = 0x170c), b ac7, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d2 | mcspi3_cs0 | NA | hsusb1_data2 | gpio_16 | mm1_txdat | hsusb1_tll_data2 | NA
+== etk_d3 ==
+name: etk_d3.gpio_17 (0x480025e2/0x5b2 = 0x170c), b ad8, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d3 | mcspi3_clk | sdmmc3_dat3 | hsusb1_data7 | gpio_17 | NA | hsusb1_tll_data7 | NA
+== etk_d4 ==
+name: etk_d4.gpio_18 (0x480025e4/0x5b4 = 0x170c), b ac5, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d4 | mcbsp5_dr | sdmmc3_dat0 | hsusb1_data4 | gpio_18 | NA | hsusb1_tll_data4 | NA
+== etk_d5 ==
+name: etk_d5.gpio_19 (0x480025e6/0x5b6 = 0x170c), b ad2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d5 | mcbsp5_fsx | sdmmc3_dat1 | hsusb1_data5 | gpio_19 | NA | hsusb1_tll_data5 | NA
+== etk_d6 ==
+name: etk_d6.gpio_20 (0x480025e8/0x5b8 = 0x170c), b ac8, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d6 | mcbsp5_dx | sdmmc3_dat2 | hsusb1_data6 | gpio_20 | NA | hsusb1_tll_data6 | NA
+== etk_d7 ==
+name: etk_d7.gpio_21 (0x480025ea/0x5ba = 0x170c), b ad9, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d7 | mcspi3_cs1 | sdmmc3_dat7 | hsusb1_data3 | gpio_21 | mm1_txen_n | hsusb1_tll_data3 | NA
+== etk_d8 ==
+name: etk_d8.gpio_22 (0x480025ec/0x5bc = 0x170c), b ac4, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d8 | sys_drm_msecure | sdmmc3_dat6 | hsusb1_dir | gpio_22 | NA | hsusb1_tll_dir | NA
+== etk_d9 ==
+name: etk_d9.gpio_23 (0x480025ee/0x5be = 0x170c), b ad5, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE4
+signals: etk_d9 | sys_secure_indicator | sdmmc3_dat5 | hsusb1_nxt | gpio_23 | mm1_rxdm | hsusb1_tll_nxt | NA
+== gpmc_a1 ==
+name: gpmc_a1.safe_mode (0x4800207a/0x04a = 0x170f), b k4, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a1 | NA | NA | NA | gpio_34 | NA | NA | safe_mode
+== gpmc_a10 ==
+name: gpmc_a10.safe_mode (0x4800208c/0x05c = 0x170f), b g2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a10 | sys_ndmareq3 | NA | NA | gpio_43 | NA | NA | safe_mode
+== gpmc_a2 ==
+name: gpmc_a2.safe_mode (0x4800207c/0x04c = 0x170f), b k3, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a2 | NA | NA | NA | gpio_35 | NA | NA | safe_mode
+== gpmc_a3 ==
+name: gpmc_a3.safe_mode (0x4800207e/0x04e = 0x170f), b k2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a3 | NA | NA | NA | gpio_36 | NA | NA | safe_mode
+== gpmc_a4 ==
+name: gpmc_a4.safe_mode (0x48002080/0x050 = 0x170f), b j4, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a4 | NA | NA | NA | gpio_37 | NA | NA | safe_mode
+== gpmc_a5 ==
+name: gpmc_a5.safe_mode (0x48002082/0x052 = 0x170f), b j3, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a5 | NA | NA | NA | gpio_38 | NA | NA | safe_mode
+== gpmc_a6 ==
+name: gpmc_a6.safe_mode (0x48002084/0x054 = 0x170f), b j2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a6 | NA | NA | NA | gpio_39 | NA | NA | safe_mode
+== gpmc_a7 ==
+name: gpmc_a7.safe_mode (0x48002086/0x056 = 0x170f), b j1, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a7 | NA | NA | NA | gpio_40 | NA | NA | safe_mode
+== gpmc_a8 ==
+name: gpmc_a8.safe_mode (0x48002088/0x058 = 0x170f), b h1, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a8 | NA | NA | NA | gpio_41 | NA | NA | safe_mode
+== gpmc_a9 ==
+name: gpmc_a9.safe_mode (0x4800208a/0x05a = 0x1607), b h2, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_a9 | sys_ndmareq2 | NA | NA | gpio_42 | NA | NA | safe_mode
+== gpmc_clk ==
+name: gpmc_clk.safe_mode (0x480020be/0x08e = 0x170f), b w2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_clk | NA | NA | NA | gpio_59 | NA | NA | safe_mode
+== gpmc_d10 ==
+name: gpmc_d10.gpmc_d10 (0x480020a2/0x072 = 0x0118), b u1, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d10 | NA | NA | NA | gpio_46 | NA | NA | safe_mode
+== gpmc_d11 ==
+name: gpmc_d11.gpmc_d11 (0x480020a4/0x074 = 0x0118), b r3, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d11 | NA | NA | NA | gpio_47 | NA | NA | safe_mode
+== gpmc_d12 ==
+name: gpmc_d12.gpmc_d12 (0x480020a6/0x076 = 0x0118), b t3, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d12 | NA | NA | NA | gpio_48 | NA | NA | safe_mode
+== gpmc_d13 ==
+name: gpmc_d13.gpmc_d13 (0x480020a8/0x078 = 0x0118), b u2, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d13 | NA | NA | NA | gpio_49 | NA | NA | safe_mode
+== gpmc_d14 ==
+name: gpmc_d14.gpmc_d14 (0x480020aa/0x07a = 0x0118), b v1, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d14 | NA | NA | NA | gpio_50 | NA | NA | safe_mode
+== gpmc_d15 ==
+name: gpmc_d15.gpmc_d15 (0x480020ac/0x07c = 0x0118), b v2, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d15 | NA | NA | NA | gpio_51 | NA | NA | safe_mode
+== gpmc_d8 ==
+name: gpmc_d8.gpmc_d8 (0x4800209e/0x06e = 0x0118), b r2, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d8 | NA | NA | NA | gpio_44 | NA | NA | safe_mode
+== gpmc_d9 ==
+name: gpmc_d9.gpmc_d9 (0x480020a0/0x070 = 0x0118), b t2, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: gpmc_d9 | NA | NA | NA | gpio_45 | NA | NA | safe_mode
+== gpmc_nbe0_cle ==
+name: gpmc_nbe0_cle.gpmc_nbe0_cle (0x480020c6/0x096 = 0x0018), b k5, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE0
+signals: gpmc_nbe0_cle | NA | NA | NA | gpio_60 | NA | NA | safe_mode
+== gpmc_nbe1 ==
+name: gpmc_nbe1.gpio_61 (0x480020c8/0x098 = 0x0204), b l1, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE4
+signals: gpmc_nbe1 | NA | NA | NA | gpio_61 | NA | NA | safe_mode
+== gpmc_ncs1 ==
+name: gpmc_ncs1.safe_mode (0x480020b0/0x080 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_ncs1 | NA | NA | NA | gpio_52 | NA | NA | safe_mode
+== gpmc_ncs2 ==
+name: gpmc_ncs2.safe_mode (0x480020b2/0x082 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_ncs2 | NA | NA | NA | gpio_53 | NA | NA | safe_mode
+== gpmc_ncs3 ==
+name: gpmc_ncs3.safe_mode (0x480020b4/0x084 = 0x170f), b d2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_ncs3 | sys_ndmareq0 | NA | NA | gpio_54 | NA | NA | safe_mode
+== gpmc_ncs4 ==
+name: gpmc_ncs4.safe_mode (0x480020b6/0x086 = 0x170f), b f4, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_ncs4 | sys_ndmareq1 | mcbsp4_clkx | gpt9_pwm_evt | gpio_55 | NA | NA | safe_mode
+== gpmc_ncs5 ==
+name: gpmc_ncs5.safe_mode (0x480020b8/0x088 = 0x170f), b g5, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_ncs5 | sys_ndmareq2 | mcbsp4_dr | gpt10_pwm_evt | gpio_56 | NA | NA | safe_mode
+== gpmc_ncs6 ==
+name: gpmc_ncs6.gpt11_pwm_evt (0x480020ba/0x08a = 0x0003), b f3, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE3
+signals: gpmc_ncs6 | sys_ndmareq3 | mcbsp4_dx | gpt11_pwm_evt | gpio_57 | NA | NA | safe_mode
+== gpmc_ncs7 ==
+name: gpmc_ncs7.gpio_58 (0x480020bc/0x08c = 0x0004), b g4, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE4
+signals: gpmc_ncs7 | gpmc_io_dir | mcbsp4_fsx | gpt8_pwm_evt | gpio_58 | NA | NA | safe_mode
+== gpmc_nwp ==
+name: gpmc_nwp.gpmc_nwp (0x480020ca/0x09a = 0x0100), b e1, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: gpmc_nwp | NA | NA | NA | gpio_62 | NA | NA | safe_mode
+== gpmc_wait1 ==
+name: gpmc_wait1.safe_mode (0x480020ce/0x09e = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_wait1 | NA | NA | NA | gpio_63 | NA | NA | safe_mode
+== gpmc_wait2 ==
+name: gpmc_wait2.safe_mode (0x480020d0/0x0a0 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: gpmc_wait2 | NA | NA | NA | gpio_64 | NA | NA | safe_mode
+== gpmc_wait3 ==
+name: gpmc_wait3.gpio_65 (0x480020d2/0x0a2 = 0x4104), b c2, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE4
+signals: gpmc_wait3 | sys_ndmareq1 | NA | NA | gpio_65 | NA | NA | safe_mode
+== hdq_sio ==
+name: hdq_sio.safe_mode (0x480021c6/0x196 = 0x170f), b a24, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: hdq_sio | sys_altclk | i2c2_sccbe | i2c3_sccbe | gpio_170 | NA | NA | safe_mode
+== hsusb0_clk ==
+name: hsusb0_clk.hsusb0_clk (0x480021a2/0x172 = 0x1700), b r21, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_clk | NA | NA | NA | gpio_120 | NA | NA | safe_mode
+== hsusb0_data0 ==
+name: hsusb0_data0.hsusb0_data0 (0x480021aa/0x17a = 0x1700), b t24, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data0 | NA | uart3_tx_irtx | NA | gpio_125 | NA | NA | safe_mode
+== hsusb0_data1 ==
+name: hsusb0_data1.hsusb0_data1 (0x480021ac/0x17c = 0x1700), b t23, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data1 | NA | uart3_rx_irrx | NA | gpio_130 | NA | NA | safe_mode
+== hsusb0_data2 ==
+name: hsusb0_data2.hsusb0_data2 (0x480021ae/0x17e = 0x1700), b u24, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data2 | NA | uart3_rts_sd | NA | gpio_131 | NA | NA | safe_mode
+== hsusb0_data3 ==
+name: hsusb0_data3.hsusb0_data3 (0x480021b0/0x180 = 0x1700), b u23, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data3 | NA | uart3_cts_rctx | NA | gpio_169 | NA | NA | safe_mode
+== hsusb0_data4 ==
+name: hsusb0_data4.hsusb0_data4 (0x480021b2/0x182 = 0x1700), b w24, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data4 | NA | NA | NA | gpio_188 | NA | NA | safe_mode
+== hsusb0_data5 ==
+name: hsusb0_data5.hsusb0_data5 (0x480021b4/0x184 = 0x1700), b v23, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data5 | NA | NA | NA | gpio_189 | NA | NA | safe_mode
+== hsusb0_data6 ==
+name: hsusb0_data6.hsusb0_data6 (0x480021b6/0x186 = 0x1700), b w23, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data6 | NA | NA | NA | gpio_190 | NA | NA | safe_mode
+== hsusb0_data7 ==
+name: hsusb0_data7.hsusb0_data7 (0x480021b8/0x188 = 0x1700), b t22, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_data7 | NA | NA | NA | gpio_191 | NA | NA | safe_mode
+== hsusb0_dir ==
+name: hsusb0_dir.hsusb0_dir (0x480021a6/0x176 = 0x1700), b p23, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_dir | NA | NA | NA | gpio_122 | NA | NA | safe_mode
+== hsusb0_nxt ==
+name: hsusb0_nxt.hsusb0_nxt (0x480021a8/0x178 = 0x1700), b r22, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_nxt | NA | NA | NA | gpio_124 | NA | NA | safe_mode
+== hsusb0_stp ==
+name: hsusb0_stp.hsusb0_stp (0x480021a4/0x174 = 0x1600), b r23, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: hsusb0_stp | NA | NA | NA | gpio_121 | NA | NA | safe_mode
+== i2c2_scl ==
+name: i2c2_scl.i2c2_scl (0x480021be/0x18e = 0x0100), b ac15, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: i2c2_scl | NA | NA | NA | gpio_168 | NA | NA | safe_mode
+== i2c2_sda ==
+name: i2c2_sda.i2c2_sda (0x480021c0/0x190 = 0x0100), b ac14, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: i2c2_sda | NA | NA | NA | gpio_183 | NA | NA | safe_mode
+== i2c3_scl ==
+name: i2c3_scl.i2c3_scl (0x480021c2/0x192 = 0x0100), b ac13, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: i2c3_scl | NA | NA | NA | gpio_184 | NA | NA | safe_mode
+== i2c3_sda ==
+name: i2c3_sda.i2c3_sda (0x480021c4/0x194 = 0x0100), b ac12, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: i2c3_sda | NA | NA | NA | gpio_185 | NA | NA | safe_mode
+== i2c4_scl ==
+name: i2c4_scl.i2c4_scl (0x48002a00/0x9d0 = 0x0118), b y16, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: i2c4_scl | sys_nvmode1 | NA | NA | NA | NA | NA | safe_mode
+== i2c4_sda ==
+name: i2c4_sda.i2c4_sda (0x48002a02/0x9d2 = 0x0118), b y15, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: i2c4_sda | sys_nvmode2 | NA | NA | NA | NA | NA | safe_mode
+== jtag_emu0 ==
+name: jtag_emu0.jtag_emu0 (0x48002a24/0x9f4 = 0x0100), b ac24, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: jtag_emu0 | NA | NA | NA | gpio_11 | NA | NA | safe_mode
+== jtag_emu1 ==
+name: jtag_emu1.jtag_emu1 (0x48002a26/0x9f6 = 0x0100), b ad24, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: jtag_emu1 | NA | NA | NA | gpio_31 | NA | NA | safe_mode
+== mcbsp1_clkr ==
+name: mcbsp1_clkr.safe_mode (0x4800218c/0x15c = 0x170f), b w19, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp1_clkr | mcspi4_clk | NA | NA | gpio_156 | NA | NA | safe_mode
+== mcbsp1_clkx ==
+name: mcbsp1_clkx.safe_mode (0x48002198/0x168 = 0x170f), b v18, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp1_clkx | NA | mcbsp3_clkx | NA | gpio_162 | NA | NA | safe_mode
+== mcbsp1_dr ==
+name: mcbsp1_dr.safe_mode (0x48002192/0x162 = 0x170f), b y18, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp1_dr | mcspi4_somi | mcbsp3_dr | NA | gpio_159 | NA | NA | safe_mode
+== mcbsp1_dx ==
+name: mcbsp1_dx.safe_mode (0x48002190/0x160 = 0x0107), b w18, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE7
+signals: mcbsp1_dx | mcspi4_simo | mcbsp3_dx | NA | gpio_158 | NA | NA | safe_mode
+== mcbsp1_fsr ==
+name: mcbsp1_fsr.safe_mode (0x4800218e/0x15e = 0x170f), b ab20, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp1_fsr | NA | cam_global_reset | NA | gpio_157 | NA | NA | safe_mode
+== mcbsp1_fsx ==
+name: mcbsp1_fsx.gpio_161 (0x48002196/0x166 = 0x0204), b aa19, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE4
+signals: mcbsp1_fsx | mcspi4_cs0 | mcbsp3_fsx | NA | gpio_161 | NA | NA | safe_mode
+== mcbsp2_clkx ==
+name: mcbsp2_clkx.safe_mode (0x4800213e/0x10e = 0x170f), b t21, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp2_clkx | NA | NA | NA | gpio_117 | NA | NA | safe_mode
+== mcbsp2_dr ==
+name: mcbsp2_dr.safe_mode (0x48002140/0x110 = 0x170f), b v19, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp2_dr | NA | NA | NA | gpio_118 | NA | NA | safe_mode
+== mcbsp2_dx ==
+name: mcbsp2_dx.safe_mode (0x48002142/0x112 = 0x1607), b r20, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp2_dx | NA | NA | NA | gpio_119 | NA | NA | safe_mode
+== mcbsp2_fsx ==
+name: mcbsp2_fsx.safe_mode (0x4800213c/0x10c = 0x170f), b v20, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp2_fsx | NA | NA | NA | gpio_116 | NA | NA | safe_mode
+== mcbsp3_clkx ==
+name: mcbsp3_clkx.safe_mode (0x48002170/0x140 = 0x1607), b w4, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp3_clkx | uart2_tx | NA | NA | gpio_142 | NA | NA | safe_mode
+== mcbsp3_dr ==
+name: mcbsp3_dr.safe_mode (0x4800216e/0x13e = 0x1607), b v5, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp3_dr | uart2_rts | NA | NA | gpio_141 | NA | NA | safe_mode
+== mcbsp3_dx ==
+name: mcbsp3_dx.safe_mode (0x4800216c/0x13c = 0x0107), b v6, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE7
+signals: mcbsp3_dx | uart2_cts | NA | NA | gpio_140 | NA | NA | safe_mode
+== mcbsp3_fsx ==
+name: mcbsp3_fsx.safe_mode (0x48002172/0x142 = 0x0107), b v4, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE7
+signals: mcbsp3_fsx | uart2_rx | NA | NA | gpio_143 | NA | NA | safe_mode
+== mcbsp4_clkx ==
+name: mcbsp4_clkx.safe_mode (0x48002184/0x154 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp4_clkx | NA | NA | NA | gpio_152 | hsusb3_tll_data1 | mm3_txse0 | safe_mode
+== mcbsp4_dr ==
+name: mcbsp4_dr.safe_mode (0x48002186/0x156 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp4_dr | NA | NA | NA | gpio_153 | hsusb3_tll_data0 | mm3_rxrcv | safe_mode
+== mcbsp4_dx ==
+name: mcbsp4_dx.safe_mode (0x48002188/0x158 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp4_dx | NA | NA | NA | gpio_154 | hsusb3_tll_data2 | mm3_txdat | safe_mode
+== mcbsp4_fsx ==
+name: mcbsp4_fsx.safe_mode (0x4800218a/0x15a = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp4_fsx | NA | NA | NA | gpio_155 | hsusb3_tll_data3 | mm3_txen_n | safe_mode
+== mcbsp_clks ==
+name: mcbsp_clks.safe_mode (0x48002194/0x164 = 0x170f), b aa18, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcbsp_clks | NA | cam_shutter | NA | gpio_160 | uart1_cts | NA | safe_mode
+== mcspi1_clk ==
+name: mcspi1_clk.mcspi1_clk (0x480021c8/0x198 = 0x0100), b t5, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: mcspi1_clk | sdmmc2_dat4 | NA | NA | gpio_171 | NA | NA | safe_mode
+== mcspi1_cs0 ==
+name: mcspi1_cs0.mcspi1_cs0 (0x480021ce/0x19e = 0x0108), b t6, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_MUX_MODE0
+signals: mcspi1_cs0 | sdmmc2_dat7 | NA | NA | gpio_174 | NA | NA | safe_mode
+== mcspi1_cs1 ==
+name: mcspi1_cs1.safe_mode (0x480021d0/0x1a0 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcspi1_cs1 | NA | NA | sdmmc3_cmd | gpio_175 | NA | NA | safe_mode
+== mcspi1_cs2 ==
+name: mcspi1_cs2.safe_mode (0x480021d2/0x1a2 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: mcspi1_cs2 | NA | NA | sdmmc3_clk | gpio_176 | NA | NA | safe_mode
+== mcspi1_cs3 ==
+name: mcspi1_cs3.gpio_177 (0x480021d4/0x1a4 = 0x0204), b r5, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_OUTPUT_LOW | OMAP_MUX_MODE4
+signals: mcspi1_cs3 | NA | hsusb2_tll_data2 | hsusb2_data2 | gpio_177 | mm2_txdat | NA | safe_mode
+== mcspi1_simo ==
+name: mcspi1_simo.mcspi1_simo (0x480021ca/0x19a = 0x0000), b r4, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE0
+signals: mcspi1_simo | sdmmc2_dat5 | NA | NA | gpio_172 | NA | NA | safe_mode
+== mcspi1_somi ==
+name: mcspi1_somi.mcspi1_somi (0x480021cc/0x19c = 0x0100), b t4, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: mcspi1_somi | sdmmc2_dat6 | NA | NA | gpio_173 | NA | NA | safe_mode
+== mcspi2_clk ==
+name: mcspi2_clk.mcspi2_clk (0x480021d6/0x1a6 = 0x0100), b n5, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: mcspi2_clk | NA | hsusb2_tll_data7 | hsusb2_data7 | gpio_178 | NA | NA | safe_mode
+== mcspi2_cs0 ==
+name: mcspi2_cs0.mcspi2_cs0 (0x480021dc/0x1ac = 0x0000), b m5, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE0
+signals: mcspi2_cs0 | gpt11_pwm_evt | hsusb2_tll_data6 | hsusb2_data6 | gpio_181 | NA | NA | safe_mode
+== mcspi2_cs1 ==
+name: mcspi2_cs1.gpio_182 (0x480021de/0x1ae = 0x7704), b m4, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE4
+signals: mcspi2_cs1 | gpt8_pwm_evt | hsusb2_tll_data3 | hsusb2_data3 | gpio_182 | mm2_txen_n | NA | safe_mode
+== mcspi2_simo ==
+name: mcspi2_simo.mcspi2_simo (0x480021d8/0x1a8 = 0x0000), b n4, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE0
+signals: mcspi2_simo | gpt9_pwm_evt | hsusb2_tll_data4 | hsusb2_data4 | gpio_179 | NA | NA | safe_mode
+== mcspi2_somi ==
+name: mcspi2_somi.mcspi2_somi (0x480021da/0x1aa = 0x0100), b n3, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: mcspi2_somi | gpt10_pwm_evt | hsusb2_tll_data5 | hsusb2_data5 | gpio_180 | NA | NA | safe_mode
+== sdmmc1_clk ==
+name: sdmmc1_clk.safe_mode (0x48002144/0x114 = 0x3607), b m23, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE7
+signals: sdmmc1_clk | NA | NA | NA | gpio_120 | NA | NA | safe_mode
+== sdmmc1_cmd ==
+name: sdmmc1_cmd.safe_mode (0x48002146/0x116 = 0x3607), b l23, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE7
+signals: sdmmc1_cmd | NA | NA | NA | gpio_121 | NA | NA | safe_mode
+== sdmmc1_dat0 ==
+name: sdmmc1_dat0.safe_mode (0x48002148/0x118 = 0x3607), b m22, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE7
+signals: sdmmc1_dat0 | NA | NA | NA | gpio_122 | NA | NA | safe_mode
+== sdmmc1_dat1 ==
+name: sdmmc1_dat1.safe_mode (0x4800214a/0x11a = 0x3607), b m21, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE7
+signals: sdmmc1_dat1 | NA | NA | NA | gpio_123 | NA | NA | safe_mode
+== sdmmc1_dat2 ==
+name: sdmmc1_dat2.safe_mode (0x4800214c/0x11c = 0x3607), b m20, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE7
+signals: sdmmc1_dat2 | NA | NA | NA | gpio_124 | NA | NA | safe_mode
+== sdmmc1_dat3 ==
+name: sdmmc1_dat3.safe_mode (0x4800214e/0x11e = 0x3607), b n23, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE7
+signals: sdmmc1_dat3 | NA | NA | NA | gpio_125 | NA | NA | safe_mode
+== sdmmc1_dat4 ==
+name: sdmmc1_dat4.sdmmc1_dat4 (0x48002150/0x120 = 0x0100), b n22, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sdmmc1_dat4 | NA | sim_io | NA | gpio_126 | NA | NA | safe_mode
+== sdmmc1_dat5 ==
+name: sdmmc1_dat5.sdmmc1_dat5 (0x48002152/0x122 = 0x0100), b n21, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sdmmc1_dat5 | NA | sim_clk | NA | gpio_127 | NA | NA | safe_mode
+== sdmmc1_dat6 ==
+name: sdmmc1_dat6.sdmmc1_dat6 (0x48002154/0x124 = 0x0100), b n20, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sdmmc1_dat6 | NA | sim_pwrctrl | NA | gpio_128 | NA | NA | safe_mode
+== sdmmc1_dat7 ==
+name: sdmmc1_dat7.sdmmc1_dat7 (0x48002156/0x126 = 0x0100), b p24, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sdmmc1_dat7 | NA | sim_rst | NA | gpio_129 | NA | NA | safe_mode
+== sdmmc2_clk ==
+name: sdmmc2_clk.sdmmc2_clk (0x48002158/0x128 = 0x0118), b y1, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sdmmc2_clk | mcspi3_clk | NA | NA | gpio_130 | NA | NA | safe_mode
+== sdmmc2_cmd ==
+name: sdmmc2_cmd.sdmmc2_cmd (0x4800215a/0x12a = 0x0118), b ab5, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sdmmc2_cmd | mcspi3_simo | NA | NA | gpio_131 | NA | NA | safe_mode
+== sdmmc2_dat0 ==
+name: sdmmc2_dat0.sdmmc2_dat0 (0x4800215c/0x12c = 0x0118), b ab3, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sdmmc2_dat0 | mcspi3_somi | NA | NA | gpio_132 | NA | NA | safe_mode
+== sdmmc2_dat1 ==
+name: sdmmc2_dat1.sdmmc2_dat1 (0x4800215e/0x12e = 0x0118), b y3, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sdmmc2_dat1 | NA | NA | NA | gpio_133 | NA | NA | safe_mode
+== sdmmc2_dat2 ==
+name: sdmmc2_dat2.sdmmc2_dat2 (0x48002160/0x130 = 0x0118), b w3, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sdmmc2_dat2 | mcspi3_cs1 | NA | NA | gpio_134 | NA | NA | safe_mode
+== sdmmc2_dat3 ==
+name: sdmmc2_dat3.sdmmc2_dat3 (0x48002162/0x132 = 0x0118), b v3, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sdmmc2_dat3 | mcspi3_cs0 | NA | NA | gpio_135 | NA | NA | safe_mode
+== sdmmc2_dat4 ==
+name: sdmmc2_dat4.safe_mode (0x48002164/0x134 = 0x170f), b ab2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: sdmmc2_dat4 | sdmmc2_dir_dat0 | NA | sdmmc3_dat0 | gpio_136 | NA | NA | safe_mode
+== sdmmc2_dat5 ==
+name: sdmmc2_dat5.safe_mode (0x48002166/0x136 = 0x170f), b aa2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: sdmmc2_dat5 | sdmmc2_dir_dat1 | cam_global_reset | sdmmc3_dat1 | gpio_137 | NA | NA | safe_mode
+== sdmmc2_dat6 ==
+name: sdmmc2_dat6.safe_mode (0x48002168/0x138 = 0x170f), b y2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: sdmmc2_dat6 | sdmmc2_dir_cmd | cam_shutter | sdmmc3_dat2 | gpio_138 | NA | NA | safe_mode
+== sdmmc2_dat7 ==
+name: sdmmc2_dat7.safe_mode (0x4800216a/0x13a = 0x170f), b aa1, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: sdmmc2_dat7 | sdmmc2_clkin | NA | sdmmc3_dat3 | gpio_139 | NA | NA | safe_mode
+== sdrc_cke0 ==
+name: sdrc_cke0.sdrc_cke0 (0x48002262/0x232 = 0x0118), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sdrc_cke0 | NA | NA | NA | NA | NA | NA | safe_mode
+== sdrc_cke1 ==
+name: sdrc_cke1.safe_mode (0x48002264/0x234 = 0x010f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: sdrc_cke1 | NA | NA | NA | NA | NA | NA | safe_mode
+== sys_boot0 ==
+name: sys_boot0.sys_boot0 (0x48002a0a/0x9da = 0x0100), b ab12, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_boot0 | NA | NA | NA | gpio_2 | NA | NA | safe_mode
+== sys_boot1 ==
+name: sys_boot1.sys_boot1 (0x48002a0c/0x9dc = 0x0100), b ac16, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_boot1 | NA | NA | NA | gpio_3 | NA | NA | safe_mode
+== sys_boot2 ==
+name: sys_boot2.sys_boot2 (0x48002a0e/0x9de = 0x0100), b ad17, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_boot2 | NA | NA | NA | gpio_4 | NA | NA | safe_mode
+== sys_boot3 ==
+name: sys_boot3.sys_boot3 (0x48002a10/0x9e0 = 0x0100), b ad18, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_boot3 | NA | NA | NA | gpio_5 | NA | NA | safe_mode
+== sys_boot4 ==
+name: sys_boot4.sys_boot4 (0x48002a12/0x9e2 = 0x0100), b ac17, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_boot4 | sdmmc2_dir_dat2 | NA | NA | gpio_6 | NA | NA | safe_mode
+== sys_boot5 ==
+name: sys_boot5.sys_boot5 (0x48002a14/0x9e4 = 0x0100), b ab16, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_boot5 | sdmmc2_dir_dat3 | NA | NA | gpio_7 | NA | NA | safe_mode
+== sys_boot6 ==
+name: sys_boot6.sys_boot6 (0x48002a16/0x9e6 = 0x0100), b aa15, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_boot6 | NA | NA | NA | gpio_8 | NA | NA | safe_mode
+== sys_clkout1 ==
+name: sys_clkout1.sys_clkout1 (0x48002a1a/0x9ea = 0x0018), b y7, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE0
+signals: sys_clkout1 | NA | NA | NA | gpio_10 | NA | NA | safe_mode
+== sys_clkout2 ==
+name: sys_clkout2.safe_mode (0x480021e2/0x1b2 = 0x170f), b aa6, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: sys_clkout2 | NA | NA | NA | gpio_186 | NA | NA | safe_mode
+== sys_clkreq ==
+name: sys_clkreq.sys_clkreq (0x48002a06/0x9d6 = 0x0100), b y13, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_clkreq | NA | NA | NA | gpio_1 | NA | NA | safe_mode
+== sys_nirq ==
+name: sys_nirq.sys_nirq (0x480021e0/0x1b0 = 0x7718), b w16, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE0
+signals: sys_nirq | NA | NA | NA | gpio_0 | NA | NA | safe_mode
+== sys_nreswarm ==
+name: sys_nreswarm.sys_nreswarm (0x48002a08/0x9d8 = 0x0118), b y10, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: sys_nreswarm | NA | NA | NA | gpio_30 | NA | NA | safe_mode
+== sys_off_mode ==
+name: sys_off_mode.sys_off_mode (0x48002a18/0x9e8 = 0x0100), b ad23, t NA
+mode: OMAP_PIN_INPUT | OMAP_MUX_MODE0
+signals: sys_off_mode | NA | NA | NA | gpio_9 | NA | NA | safe_mode
+== uart1_cts ==
+name: uart1_cts.safe_mode (0x48002180/0x150 = 0x170f), b ac2, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: uart1_cts | NA | NA | NA | gpio_150 | NA | NA | safe_mode
+== uart1_rts ==
+name: uart1_rts.safe_mode (0x4800217e/0x14e = 0x170f), b w6, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: uart1_rts | NA | NA | NA | gpio_149 | NA | NA | safe_mode
+== uart1_rx ==
+name: uart1_rx.uart1_rx (0x48002182/0x152 = 0x7718), b v7, t NA
+mode: OMAP_PIN_INPUT_PULLUP | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE0
+signals: uart1_rx | NA | mcbsp1_clkr | mcspi4_clk | gpio_151 | NA | NA | safe_mode
+== uart1_tx ==
+name: uart1_tx.uart1_tx (0x4800217c/0x14c = 0x0000), b w7, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_MUX_MODE0
+signals: uart1_tx | NA | NA | NA | gpio_148 | NA | NA | safe_mode
+== uart2_cts ==
+name: uart2_cts.safe_mode (0x48002174/0x144 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: uart2_cts | mcbsp3_dx | gpt9_pwm_evt | NA | gpio_144 | NA | NA | safe_mode
+== uart2_rts ==
+name: uart2_rts.safe_mode (0x48002176/0x146 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: uart2_rts | mcbsp3_dr | gpt10_pwm_evt | NA | gpio_145 | NA | NA | safe_mode
+== uart2_rx ==
+name: uart2_rx.safe_mode (0x4800217a/0x14a = 0x570f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE7
+signals: uart2_rx | mcbsp3_fsx | gpt8_pwm_evt | NA | gpio_147 | NA | NA | safe_mode
+== uart2_tx ==
+name: uart2_tx.safe_mode (0x48002178/0x148 = 0x170f), b NA, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: uart2_tx | mcbsp3_clkx | gpt11_pwm_evt | NA | gpio_146 | NA | NA | safe_mode
+== uart3_cts_rctx ==
+name: uart3_cts_rctx.safe_mode (0x4800219a/0x16a = 0x170f), b a23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: uart3_cts_rctx | NA | NA | NA | gpio_163 | NA | NA | safe_mode
+== uart3_rts_sd ==
+name: uart3_rts_sd.safe_mode (0x4800219c/0x16c = 0x170f), b b23, t NA
+mode: OMAP_PIN_INPUT_PULLDOWN | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_MUX_MODE7
+signals: uart3_rts_sd | NA | NA | NA | gpio_164 | NA | NA | safe_mode
+== uart3_rx_irrx ==
+name: uart3_rx_irrx.uart3_rx_irrx (0x4800219e/0x16e = 0x5700), b b24, t NA
+mode: OMAP_PIN_INPUT | OMAP_PIN_OFF_INPUT_PULLDOWN | OMAP_PIN_OFF_WAKEUPENABLE | OMAP_MUX_MODE0
+signals: uart3_rx_irrx | NA | NA | NA | gpio_165 | NA | NA | safe_mode
+== uart3_tx_irtx ==
+name: uart3_tx_irtx.uart3_tx_irtx (0x480021a0/0x170 = 0x3600), b c23, t NA
+mode: OMAP_PIN_OUTPUT | OMAP_PIN_OFF_INPUT_PULLUP | OMAP_MUX_MODE0
+signals: uart3_tx_irtx | NA | NA | NA | gpio_166 | NA | NA | safe_mode

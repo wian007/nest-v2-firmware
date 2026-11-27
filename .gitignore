@@ -1,0 +1,41 @@
+# Yocto / kas build artifacts
+.venv
+build/
+sstate-cache/
+downloads/
+tmp/
+
+# Upstream source trees are fetched by kas, not vendored
+poky/
+meta-openembedded/
+meta-ti/
+
+# Device backups / anything with secrets — never commit
+backup/
+*.jffs2
+mtd*.bin
+rootfs-*.tar.gz
+*.core
+
+# oe-core / bitbake / meta-yocto checkouts made by kas (blacksail)
+bitbake/
+openembedded-core/
+meta-yocto/
+
+# Rust build output (tools/bpd etc.)
+target/
+scratchpad/
+tools/j49-screen/target/
+
+# U-Boot source and build tree: unpacked and patched by tools/dfu-install/uboot/build.sh
+tools/dfu-install/uboot/out/u-boot-2024.07/
+tools/dfu-install/uboot/out/*.tar.bz2
+
+# Loader images from NestDFUAttack / cuckoo_loader: not in this repository (see
+# tools/dfu-install/nest-dfu/README.md), and our own built images: build them or take a release.
+tools/dfu-install/nest-dfu/*
+!tools/dfu-install/nest-dfu/README.md
+!tools/dfu-install/nest-dfu/check.sh
+tools/dfu-install/installer/out/
+tools/dfu-install/uboot/out/
+docs/hw/omap3-xloader-stock.asm

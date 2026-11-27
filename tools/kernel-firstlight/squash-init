@@ -1,0 +1,90 @@
+#!/bin/sh
+# squash-init -- /init of the kexec initramfs for the RAM-resident rootfs test (phase 3,
+# before anything is written to NAND).
+#
+# The initramfs carries the j49-image squashfs-xz as /rootfs.squashfs. This script
+# loop-mounts it, puts a tmpfs overlay on top so systemd gets a writable /etc and /var,
+# copies the provisioning tree /overlay/* into the upper layer (the secrets that are not in
+# the image: wpa_supplicant-wlan0.conf, dropbear host keys, authorized_keys, the device NVS;
+# plus the kexec-session guard unit, see pack-squash-initramfs.sh) and switch_roots into
+# systemd. Every step is mirrored to /dev/kmsg so the DEBUG_LL / ramoops post-mortem shows
+# where it stopped. On failure: rescue shell on the console for 120 s, then a warm reboot
+# back to stock (DRAM and the ramoops zone survive that).
+k() { echo "NEST-SQ: $*" > /dev/kmsg 2>/dev/null; echo "NEST-SQ: $*"; }
+fail() {
+  k "FAIL: $*"; k "rescue shell for 120 s, then warm reboot to stock"
+  ( sleep 120; sync; echo b > /proc/sysrq-trigger ) &
+  exec sh
+}
+
+mount -t proc proc /proc 2>/dev/null
+mount -t sysfs sysfs /sys 2>/dev/null
+grep -q " /dev devtmpfs" /proc/mounts || mount -t devtmpfs devtmpfs /dev
+k "start $(uname -r) uptime=$(cut -d' ' -f1 /proc/uptime) $(grep MemTotal /proc/meminfo | tr -s ' ')"
+k "cmdline: $(cat /proc/cmdline)"
+echo 0 > /proc/sys/vm/watermark_boost_factor 2>/dev/null   # see netboot-init (jump 76)
+k "payload: $(stat -Lc%s /rootfs.squashfs) bytes squashfs, overlay files: $(find /overlay ! -type d 2>/dev/null | wc -l)"
+
+mkdir -p /lower /rw /newroot
+losetup /dev/loop0 /rootfs.squashfs || fail "losetup"
+mount -t squashfs -o ro /dev/loop0 /lower || fail "squashfs mount"
+k "squashfs mounted: $(ls /lower | tr '\n' ' ')"
+
+# Upper layer: 24 MiB cap (it is a cap, not an allocation). The 64 MB budget: kernel ~6,
+# squashfs payload ~15 (page cache pinned via the loop file), systemd + services ~15.
+mount -t tmpfs -o size=24m,mode=755 tmpfs /rw || fail "tmpfs"
+mkdir -p /rw/upper /rw/work
+mount -t overlay overlay -o lowerdir=/lower,upperdir=/rw/upper,workdir=/rw/work /newroot \
+  || fail "overlay mount"
+k "overlay mounted"
+
+# zram swap (jump 80: systemd + udev + journald thrashed on the ~14 MB left next to the
+# pinned payload). Anonymous pages compress ~3:1; the loop-backed payload pages mostly stay.
+if [ -e /sys/block/zram0/disksize ]; then
+  echo lzo-rle > /sys/block/zram0/comp_algorithm 2>/dev/null
+  echo 32M > /sys/block/zram0/disksize && mkswap /dev/zram0 >/dev/null 2>&1 && swapon /dev/zram0 \
+    && k "zram swap on: $(grep SwapTotal /proc/meminfo | tr -s ' ')" || k "zram swap NOT enabled"
+fi
+
+if [ -d /overlay ]; then
+  # per top-level entry, so that usrmerge symlinks in the image (/lib -> usr/lib) are
+  # followed instead of fought (jump 80: "cp: target '/newroot/./lib' is not a directory")
+  for e in /overlay/* /overlay/.[!.]*; do
+    [ -e "$e" ] || continue; name=${e#/overlay/}
+    if [ -d "$e" ]; then mkdir -p "/newroot/$name"; err=$(cp -a "$e/." "/newroot/$name/" 2>&1)
+    else err=$(cp -a "$e" /newroot/ 2>&1); fi || k "provisioning copy of $name returned $?: $(echo "$err" | head -2 | tr '\n' '|')"
+  done
+  k "provisioned: $(cd /overlay && find . ! -type d | sed 's#^\./##' | tr '\n' ' ')"
+fi
+
+# Deadman (jump 73: 29 min of silence, then the backplate's COLD reset wiped DRAM and every
+# log with it). This subshell survives switch_root (same mount namespace; /newroot stays).
+# If nest-session.service has not started within DEADMAN s it forces a WARM reboot, which
+# keeps the ramoops zone and the DEBUG_LL ring readable from stock.
+# It is chroot'ed into the new root up front: after `switch_root` moves /newroot onto /, a
+# process still rooted in the old initramfs cannot reach the new tree, while one whose root
+# IS the new tree keeps working (the image's busybox provides sh/sleep/sync there).
+DEADMAN=${DEADMAN:-600}
+/bin/busybox chroot /newroot /bin/sh -c '
+  sleep '"$DEADMAN"'
+  [ -e /run/nest-session.started ] && exit 0
+  echo "NEST-SQ: deadman: no nest-session after '"$DEADMAN"'s -> warm reboot" > /dev/kmsg
+  sync; echo b > /proc/sysrq-trigger' </dev/null >/dev/null 2>&1 &
+
+k "switch_root -> /sbin/init at uptime=$(cut -d' ' -f1 /proc/uptime) $(grep MemFree /proc/meminfo | tr -s ' ')"
+for d in dev proc sys; do mount --move /$d /newroot/$d || echo "NEST-SQ: move /$d failed"; done
+
+# Backplate keepalive, started HERE and not via systemd. In jumps 80/81 bpd.service was
+# ordered behind udev + dev-ttyS2.device, which at 300 MHz took minutes, so the backplate
+# never got its 0xa1 frame and cold-reset the head unit at ~29 min (DRAM + logs lost).
+# This chroot'ed bpd runs from the image's own binary against the moved /dev/ttyS2, survives
+# switch_root (its root is /newroot) and keeps feeding the backplate regardless of systemd.
+# The image's bpd.service (same binary) is then just a belt-and-braces restart owner.
+if [ -x /newroot/usr/bin/bpd ]; then
+  /bin/busybox chroot /newroot /bin/sh -c \
+    'echo "NEST-SQ: early bpd keepalive on /dev/ttyS2" > /dev/kmsg
+     exec /usr/bin/bpd keepalive /dev/ttyS2 --interval 15 --max-sleep 600 --quiet' \
+    </dev/null >/dev/null 2>&1 &
+fi
+
+exec switch_root /newroot /sbin/init

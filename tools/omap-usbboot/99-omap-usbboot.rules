@@ -1,0 +1,8 @@
+# Let non-root (plugdev) talk to the OMAP3 mask-ROM in USB peripheral boot.
+# Install: sudo cp 99-omap-usbboot.rules /etc/udev/rules.d/ && sudo udevadm control --reload
+# On NixOS, instead add to services.udev.extraRules in configuration.nix.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0451", ATTR{idProduct}=="d00e", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0451", ATTR{idProduct}=="d00f", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0451", ATTR{idProduct}=="d010", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0451", ATTR{idProduct}=="d011", MODE="0660", GROUP="plugdev"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0451", ATTR{idProduct}=="d012", MODE="0660", GROUP="plugdev"

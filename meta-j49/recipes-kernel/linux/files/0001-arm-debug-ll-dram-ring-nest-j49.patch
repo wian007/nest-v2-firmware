@@ -1,0 +1,344 @@
+arm: DEBUG_LL backend that writes to a DRAM ring (Nest J49 has no debug UART)
+
+Decompressor/head.S breadcrumbs, a 64 KB ring at 0x83e80000 (two copies), mapped
+early via debug_ll_io_init() in omap3_map_io(). Read back from stock after a warm
+reset with tools/kernel-firstlight/decode-postmortem.py.
+
+Upstream-Status: Inappropriate [board-specific debug tooling]
+Signed-off-by: J49 project <j49@users.noreply.github.com>
+
+--- a/arch/arm/Kconfig.debug
++++ b/arch/arm/Kconfig.debug
+@@ -1347,6 +1347,14 @@
+ 		  If you have a ZC702 board and want early boot messages to
+ 		  appear on the USB serial adaptor, select this option.
+ 
++	config DEBUG_RAM_RING
++		bool "Kernel low-level debug output to a DRAM ring buffer"
++		help
++		  Write DEBUG_LL output (decompressor banner, head.S error paths,
++		  earlyprintk) into a ring buffer at a fixed physical DRAM address,
++		  for boards without a debug UART. Read it back from the previous OS
++		  via /dev/mem after a warm reset. See arch/arm/include/debug/ramring.S.
++
+ 	config DEBUG_ICEDCC
+ 		bool "Kernel low-level debugging via EmbeddedICE DCC channel"
+ 		help
+@@ -1478,6 +1486,7 @@
+ 
+ config DEBUG_LL_INCLUDE
+ 	string
++	default "debug/ramring.S" if DEBUG_RAM_RING
+ 	default "debug/sa1100.S" if DEBUG_SA1100
+ 	default "debug/palmchip.S" if DEBUG_UART_8250_PALMCHIP
+ 	default "debug/8250.S" if DEBUG_LL_UART_8250 || DEBUG_UART_8250
+@@ -1807,7 +1816,6 @@
+ 
+ config DEBUG_UNCOMPRESS
+ 	bool "Enable decompressor debugging via DEBUG_LL output"
+-	depends on !ARCH_MULTIPLATFORM
+ 	depends on !(ARCH_FOOTBRIDGE || ARCH_RPC || ARCH_SA1100)
+ 	depends on DEBUG_LL && !DEBUG_OMAP2PLUS_UART && \
+ 		     (!DEBUG_TEGRA_UART || !ZBOOT_ROM) && \
+--- a/arch/arm/boot/compressed/head.S
++++ b/arch/arm/boot/compressed/head.S
+@@ -77,6 +77,31 @@
+ #endif
+ #endif
+ 
++
++/*
++ * NEST-FL early-boot breadcrumbs: drop one byte into the header of the
++ * DEBUG_LL DRAM ring (arch/arm/include/debug/ramring.S, 0x83e80000) at fixed
++ * points of the decompressor, so a hang before decompress_kernel() can still
++ * be located from the previous OS via /dev/mem. Writes +0x10.. and a duplicate
++ * at +0x20.. (same cache line), cleaned to DRAM with DCCMVAC. Only r3/ip are
++ * touched; the stacked variant saves them (sp is valid from restart: on).
++ */
++		.macro	ringmark_nostack, ch, off
++		mov	ip, #0x83000000
++		orr	ip, ip, #0x00e80000
++		mov	r3, #\ch
++		strb	r3, [ip, #0x10 + \off]
++		strb	r3, [ip, #0x20 + \off]
++		mcr	p15, 0, ip, c7, c10, 1
++		dsb
++		.endm
++
++		.macro	ringmark, ch, off
++		push	{r0, r3, ip}
++		ringmark_nostack \ch, \off
++		pop	{r0, r3, ip}
++		.endm
++
+ 		.macro	kputc,val
+ 		mov	r0, \val
+ 		bl	putc
+@@ -228,6 +253,7 @@
+ #endif
+ 		mov	r7, r1			@ save architecture ID
+ 		mov	r8, r2			@ save atags pointer
++		ringmark_nostack 0x41, 0	@ NEST-FL "A": zImage entered
+ 
+ #ifndef CONFIG_CPU_V7M
+ 		/*
+@@ -327,6 +353,9 @@
+ 		cmpcc	r4, r0
+ 		orrcc	r4, r4, #1		@ remember we skipped cache_on
+ 		blcs	cache_on
++		ringmark_nostack 0x42, 1	@ NEST-FL "B": past cache_on (sp NOT valid yet: set at restart:; r3/ip dead here)
++		nop
++		nop				@ keep layout identical to the push/pop variant (adr range)
+ 
+ restart:	adr	r0, LC1
+ 		ldr	sp, [r0]
+@@ -445,6 +474,7 @@
+ 		add	sp, sp, r5
+ dtb_check_done:
+ #endif
++		ringmark 0x43, 2		@ NEST-FL "C": appended DTB/ATAG compat done
+ 
+ /*
+  * Check to see if we will overwrite ourselves.
+@@ -627,6 +657,7 @@
+  *   r7  = architecture ID
+  *   r8  = atags pointer
+  */
++		ringmark 0x44, 3		@ NEST-FL "D": calling decompress_kernel
+ 		mov	r0, r4
+ 		mov	r1, sp			@ malloc space above stack
+ 		add	r2, sp, #MALLOC_SIZE	@ 64k max
+--- a/arch/arm/mm/mmu.c
++++ b/arch/arm/mm/mmu.c
+@@ -39,6 +39,15 @@
+ #include "fault.h"
+ #include "mm.h"
+ 
++/* NEST-FL: hands-free early-boot breadcrumbs straight into the DEBUG_LL DRAM
++ * ring (bypasses printk/console state). See arch/arm/include/debug/ramring.S. */
++#ifdef CONFIG_DEBUG_LL
++extern void printascii(const char *);
++#define NEST_MARK(s) printascii("[NEST] " s "\n")
++#else
++#define NEST_MARK(s) do { } while (0)
++#endif
++
+ extern unsigned long __atags_pointer;
+ 
+ /*
+@@ -1155,7 +1164,11 @@
+ 		return;
+ 	map.pfn = __phys_to_pfn(map.pfn);
+ 	map.virtual &= PAGE_MASK;
++#ifdef CONFIG_DEBUG_RAM_RING
++	map.length = SZ_64K;	/* the DRAM ring (idx + two 32 KB text copies) */
++#else
+ 	map.length = PAGE_SIZE;
++#endif
+ 	map.type = MT_DEVICE;
+ 	iotable_init(&map, 1);
+ }
+@@ -1385,7 +1398,9 @@
+ 	 */
+ 	vectors = early_alloc(PAGE_SIZE * 2);
+ 
++	NEST_MARK("devicemaps_init: vectors allocated");
+ 	early_trap_init(vectors);
++	NEST_MARK("devicemaps_init: early_trap_init done");
+ 
+ 	/*
+ 	 * Clear page table except top pmd used by early fixmaps
+@@ -1453,10 +1468,14 @@
+ 	 * Ask the machine support to map in the statically mapped devices.
+ 	 */
+ 	if (mdesc->map_io)
++	{
+ 		mdesc->map_io();
++		NEST_MARK("devicemaps_init: map_io done");
++	}
+ 	else
+ 		debug_ll_io_init();
+ 	fill_pmd_gaps();
++	NEST_MARK("devicemaps_init: fill_pmd_gaps done");
+ 
+ 	/* Reserve fixed i/o space in VMALLOC region */
+ 	pci_reserve_io();
+@@ -1467,8 +1486,11 @@
+ 	 * any write-allocated cache lines in the vector page are written
+ 	 * back.  After this point, we can start to touch devices again.
+ 	 */
++	NEST_MARK("devicemaps_init: pci_reserve_io done, flushing tlb");
+ 	local_flush_tlb_all();
++	NEST_MARK("devicemaps_init: tlb flushed, flushing caches");
+ 	flush_cache_all();
++	NEST_MARK("devicemaps_init: caches flushed");
+ 
+ 	/* Enable asynchronous aborts */
+ 	early_abt_enable();
+@@ -1774,8 +1796,11 @@
+ 	pr_debug("physical kernel sections: 0x%08llx-0x%08llx\n",
+ 		 kernel_sec_start, kernel_sec_end);
+ 
++	NEST_MARK("paging_init: enter");
+ 	prepare_page_table();
++	NEST_MARK("paging_init: prepare_page_table done");
+ 	map_lowmem();
++	NEST_MARK("paging_init: map_lowmem done");
+ 	memblock_set_current_limit(arm_lowmem_limit);
+ 	pr_debug("lowmem limit is %08llx\n", (long long)arm_lowmem_limit);
+ 	/*
+@@ -1784,17 +1809,23 @@
+ 	 */
+ 	map_kernel();
+ 	dma_contiguous_remap();
++	NEST_MARK("paging_init: dma_contiguous_remap done");
+ 	early_fixmap_shutdown();
++	NEST_MARK("paging_init: early_fixmap_shutdown done");
+ 	devicemaps_init(mdesc);
++	NEST_MARK("paging_init: devicemaps_init done");
+ 	kmap_init();
+ 	tcm_init();
++	NEST_MARK("paging_init: kmap/tcm done");
+ 
+ 	top_pmd = pmd_off_k(0xffff0000);
+ 
+ 	/* allocate the zero page. */
+ 	zero_page = early_alloc(PAGE_SIZE);
+ 
++	NEST_MARK("paging_init: zero page ok, bootmem_init...");
+ 	bootmem_init();
++	NEST_MARK("paging_init: bootmem_init done");
+ 
+ 	empty_zero_page = virt_to_page(zero_page);
+ 	__flush_dcache_folio(NULL, page_folio(empty_zero_page));
+--- a/arch/arm/kernel/setup.c
++++ b/arch/arm/kernel/setup.c
+@@ -63,6 +63,15 @@
+ 
+ #include "atags.h"
+ 
++/* NEST-FL: hands-free early-boot breadcrumbs straight into the DEBUG_LL DRAM
++ * ring (bypasses printk/console state). See arch/arm/include/debug/ramring.S. */
++#ifdef CONFIG_DEBUG_LL
++extern void printascii(const char *);
++#define NEST_MARK(s) printascii("[NEST] " s "\n")
++#else
++#define NEST_MARK(s) do { } while (0)
++#endif
++
+ 
+ #if defined(CONFIG_FPE_NWFPE) || defined(CONFIG_FPE_FASTFPE)
+ char fpe_type[8];
+@@ -1155,12 +1164,14 @@
+ 	 */
+ 	adjust_lowmem_bounds();
+ 	arm_memblock_init(mdesc);
++	NEST_MARK("setup_arch: arm_memblock_init done");
+ 	/* Memory may have been removed so recalculate the bounds. */
+ 	adjust_lowmem_bounds();
+ 
+ 	early_ioremap_reset();
+ 
+ 	paging_init(mdesc);
++	NEST_MARK("setup_arch: paging_init done");
+ 	kasan_init();
+ 	request_standard_resources(mdesc);
+ 
+@@ -1170,6 +1181,7 @@
+ 	}
+ 
+ 	unflatten_device_tree();
++	NEST_MARK("setup_arch: unflatten_device_tree done");
+ 
+ 	arm_dt_init_cpu_maps();
+ 	psci_dt_init();
+@@ -1198,7 +1210,11 @@
+ #endif
+ 
+ 	if (mdesc->init_early)
++	{
++		NEST_MARK("setup_arch: calling init_early");
+ 		mdesc->init_early();
++		NEST_MARK("setup_arch: init_early done");
++	}
+ }
+ 
+ 
+--- a/arch/arm/mach-omap2/io.c
++++ b/arch/arm/mach-omap2/io.c
+@@ -324,6 +324,11 @@
+ #ifdef CONFIG_ARCH_OMAP3
+ void __init omap3_map_io(void)
+ {
++#ifdef CONFIG_DEBUG_RAM_RING
++	/* NEST-FL: re-map the DEBUG_LL DRAM ring page (devicemaps_init just cleared
++	 * the early head.S section for it) before anything prints again. */
++	debug_ll_io_init();
++#endif
+ 	iotable_init(omap34xx_io_desc, ARRAY_SIZE(omap34xx_io_desc));
+ }
+ #endif
+--- /dev/null
++++ b/arch/arm/include/debug/ramring.S
+@@ -0,0 +1,61 @@
++/* SPDX-License-Identifier: GPL-2.0 */
++/*
++ * DEBUG_LL backend that writes into a DRAM ring buffer instead of a UART.
++ *
++ * For boards with no debug UART wired (Nest J49 "diamond"): the ring is read
++ * back from the previous OS via /dev/mem after the watchdog warm reset, so the
++ * decompressor banner, head.S error paths and earlyprintk all become visible
++ * hands-free.
++ *
++ * Layout at RAMRING_PHYS (64 KiB; reserve it in DT WITHOUT no-map so the
++ * kernel's linear mapping still covers it):
++ *   +0x0000  u32 idx     write index 0..0x7eff (duplicated at +0x4)
++ *   +0x0100  copy A      text, indexed by idx
++ *   +0x8100  copy B      identical second copy
++ * Two copies because this DRAM loses ~1% of set bits across the OMAP3 warm
++ * reset (decay is 1->0 only); OR-merging the copies on readback recovers the
++ * text. Every store is followed by DCCMVAC so the byte reaches DRAM whether
++ * the current mapping is cacheable (decompressor flat map, post-paging_init
++ * linear map) or device (head.S maps the "debug UART" section as such).
++ *
++ * ip is used as scratch: it is free at every call site (printascii/printch in
++ * arch/arm/kernel/debug.S and putc in arch/arm/boot/compressed/debug.S).
++ */
++#define RAMRING_PHYS	0x83e80000
++#define RAMRING_VIRT	0xf7e80000	/* fixed vmalloc-space page: head.S maps the 1 MB
++					 * section early; after paging_init it is re-mapped as
++					 * a device page by debug_ll_io_init() from omap3_map_io() */
++
++		.macro	addruart, rp, rv, tmp
++		ldr	\rp, =RAMRING_PHYS
++		ldr	\rv, =RAMRING_VIRT
++		.endm
++
++		.macro	senduart, rd, rx
++		ldr	ip, [\rx]			@ idx
++		add	ip, ip, #0x100
++		strb	\rd, [\rx, ip]			@ copy A
++		add	ip, \rx, ip
++		mcr	p15, 0, ip, c7, c10, 1		@ DCCMVAC: copy A line -> DRAM
++		add	ip, ip, #0x8000
++		strb	\rd, [ip]			@ copy B
++		mcr	p15, 0, ip, c7, c10, 1		@ DCCMVAC: copy B line -> DRAM
++		sub	ip, ip, \rx
++		sub	ip, ip, #0x8000
++		sub	ip, ip, #0xff			@ idx + 1
++		cmp	ip, #0x7f00
++		movge	ip, #0				@ wrap
++		str	ip, [\rx]
++		str	ip, [\rx, #4]
++		mcr	p15, 0, \rx, c7, c10, 1		@ DCCMVAC: idx line -> DRAM
++		dsb
++		.endm
++
++		.macro	waituartcts, rd, rx
++		.endm
++
++		.macro	waituarttxrdy, rd, rx
++		.endm
++
++		.macro	busyuart, rd, rx
++		.endm

@@ -1,0 +1,16 @@
+[Unit]
+Description=Thermostat dial on the round panel (j49-screen)
+# omapdrm creates /dev/fb0 about 2 s into boot. systemd never makes a dev-fb0.device unit for a
+# framebuffer, so waiting on one blocks the start for good; poll for the node instead.
+After=systemd-udevd.service
+
+[Service]
+ExecStartPre=/bin/sh -c 'i=0; while [ ! -c /dev/fb0 ] && [ $i -lt 100 ]; do i=$((i+1)); sleep 0.2; done'
+# Take the panel from the text console, otherwise fbcon draws the login prompt over the avatar.
+ExecStartPre=-/bin/sh -c 'echo 0 > /sys/class/vtconsole/vtcon1/bind'
+ExecStart=/usr/bin/j49-screen --screen home --fps 15
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target

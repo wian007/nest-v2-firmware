@@ -1,0 +1,11 @@
+# WL1271 station: DHCP like stock. ClientIdentifier=mac so the lease (and the IP the
+# bring-up scripts expect) matches what stock's udhcpc gets for the same MAC.
+[Match]
+Name=wlan0
+
+[Network]
+DHCP=ipv4
+
+[DHCPv4]
+ClientIdentifier=mac
+UseHostname=false

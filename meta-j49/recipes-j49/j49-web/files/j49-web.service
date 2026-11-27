@@ -1,0 +1,12 @@
+[Unit]
+Description=J49 thermostat web page, login confirmed on the device (j49-web)
+# Port 80, plain HTTP, for the home network. j49-screen shows the login question.
+After=network.target j49-screen.service
+
+[Service]
+ExecStart=/usr/bin/j49-web
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

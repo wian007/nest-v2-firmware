@@ -1,0 +1,141 @@
+# SPDX-License-Identifier: GPL-2.0-or-later
+# nest_j49_defconfig -- the DFU installer's U-Boot for the Nest J49.
+#
+# Base: omap3_beagle_defconfig (same TARGET; the board code and the SPL
+# build are inherited), changed for the installer's job:
+#  - TEXT_BASE 0x80100000 (where the stock x-loader loads u-boot from
+#    spl0; the SPL itself is never used -- x-load is our SPL)
+#  - DEFAULT_DEVICE_TREE omap3-nest-j49 (uart1 console, TWL, MUSB, NAND)
+#  - whole default env from nest_j49.env (CONFIG_USE_DEFAULT_ENV_FILE)
+#  - env in NAND at the stock env0 offset (0x340000) -- never read back
+#    successfully (stock content, our ECC), so the env file IS the env
+#  - NAND ECC = BCH8 SW-detection (u-boot's only no-ELM BCH scheme that
+#    can both read and write on OMAP3): self-consistent for boot0/env,
+#    never exchanged with the kernel (kernel owns rootfs only)
+#  - DFU over MUSB gadget: ram + nand alts, dfu-util on the host
+#  - dropped: fastboot, EHCI host, usb-eth, mmc, distro defaults, leds
+CONFIG_ARM=y
+# CONFIG_SPL_USE_ARCH_MEMCPY is not set
+# CONFIG_SPL_USE_ARCH_MEMSET is not set
+CONFIG_ARCH_OMAP2PLUS=y
+CONFIG_SYS_MALLOC_F_LEN=0x4000
+CONFIG_NR_DRAM_BANKS=2
+CONFIG_HAS_CUSTOM_SYS_INIT_SP_ADDR=y
+CONFIG_CUSTOM_SYS_INIT_SP_ADDR=0x4020ff00
+CONFIG_DEFAULT_DEVICE_TREE="omap3-nest-j49"
+CONFIG_SPL_TEXT_BASE=0x40200000
+CONFIG_TARGET_OMAP3_BEAGLE=y
+CONFIG_NEST_J49_SKIP_BEAGLE_MISC=y
+CONFIG_TEXT_BASE=0x80100000
+CONFIG_SYS_MONITOR_LEN=1048576
+CONFIG_SPL_SYS_MALLOC_F_LEN=0x400
+CONFIG_SPL=y
+CONFIG_BOOTDELAY=1
+CONFIG_USE_DEFAULT_ENV_FILE=y
+CONFIG_DEFAULT_ENV_FILE="nest_j49.env"
+CONFIG_SYS_PBSIZE=1055
+CONFIG_SYS_CONSOLE_INFO_QUIET=y
+CONFIG_SPL_MAX_SIZE=0xec00
+CONFIG_SPL_SYS_MALLOC_SIMPLE=y
+CONFIG_SPL_SYS_MALLOC=y
+CONFIG_SPL_SYS_MALLOC_SIZE=0x800000
+# CONFIG_SPL_FS_EXT4 is not set
+CONFIG_SPL_MTD=y
+CONFIG_SPL_NAND_DRIVERS=y
+CONFIG_SPL_NAND_ECC=y
+CONFIG_SPL_NAND_SIMPLE=y
+CONFIG_SPL_NAND_BASE=y
+CONFIG_SYS_PROMPT="nest # "
+CONFIG_CMD_BOOTZ=y
+CONFIG_CMD_GPIO=y
+CONFIG_CMD_I2C=y
+CONFIG_CMD_NAND=y
+CONFIG_CMD_NAND_TRIMFFS=y
+CONFIG_CMD_SPI=y
+CONFIG_CMD_USB=y
+CONFIG_CMD_CACHE=y
+CONFIG_CMD_SAVEENV=y
+CONFIG_OF_CONTROL=y
+CONFIG_SPL_OF_CONTROL=y
+CONFIG_OF_SPL_REMOVE_PROPS="clocks clock-names interrupt-parent"
+CONFIG_ENV_OVERWRITE=y
+CONFIG_ENV_IS_IN_NAND=y
+CONFIG_ENV_OFFSET=0x340000
+CONFIG_ENV_SIZE=0x60000
+CONFIG_ENV_RANGE=0x60000
+CONFIG_VERSION_VARIABLE=y
+CONFIG_SPL_DM=y
+CONFIG_SPL_DM_SEQ_ALIAS=y
+CONFIG_SPL_OF_TRANSLATE=y
+CONFIG_SYS_I2C_LEGACY=y
+CONFIG_SPL_SYS_I2C_LEGACY=y
+CONFIG_MTD=y
+CONFIG_MTD_RAW_NAND=y
+CONFIG_NAND_OMAP_ECCSCHEME_BCH8_CODE_HW_DETECTION_SW=y
+CONFIG_SYS_NAND_BLOCK_SIZE=0x20000
+CONFIG_SYS_NAND_PAGE_SIZE=0x800
+CONFIG_SYS_NAND_OOBSIZE=0x40
+CONFIG_SYS_NAND_BUSWIDTH_16BIT=y
+CONFIG_SYS_NAND_U_BOOT_LOCATIONS=y
+CONFIG_SYS_NAND_U_BOOT_OFFS=0x80000
+CONFIG_PINCTRL=y
+CONFIG_PINCTRL_SINGLE=y
+CONFIG_DM_PMIC=y
+# CONFIG_SPL_PMIC_CHILDREN is not set
+CONFIG_DM_REGULATOR=y
+CONFIG_DM_REGULATOR_FIXED=y
+CONFIG_DM_REGULATOR_GPIO=y
+CONFIG_SPI=y
+CONFIG_DM_SPI=y
+CONFIG_OMAP3_SPI=y
+CONFIG_USB=y
+# CONFIG_SPL_DM_USB is not set
+CONFIG_USB_MUSB_GADGET=y
+CONFIG_USB_MUSB_OMAP2PLUS=y
+CONFIG_TWL4030_USB=y
+CONFIG_USB_GADGET=y
+CONFIG_USB_GADGET_MANUFACTURER="Nest"
+CONFIG_USB_GADGET_VENDOR_NUM=0x0451
+CONFIG_USB_GADGET_PRODUCT_NUM=0xdf10
+CONFIG_USB_GADGET_DOWNLOAD=y
+CONFIG_CMD_DFU=y
+CONFIG_DFU_NAND=y
+CONFIG_DFU_RAM=y
+CONFIG_DFU_WRITE_ALT=y
+CONFIG_BCH=y
+# Memory layout on 64 MB: the default 32 MiB heap puts U-Boot's
+# relocation target at 0x82000000 -- exactly the rootfs staging alt.
+# 8 MiB heap moves it to 0x83800000 (image ~0x83778000..0x83800000),
+# leaving the staging window 0x82000000..0x83510000 clear.
+CONFIG_SYS_MALLOC_LEN=0x800000
+# DFU limits: the rootfs staging alt is 22 MiB, so MAX_FILE_SIZE must be
+# raised (default 8 MiB rejects it). DATA_BUF is one streaming buffer, not
+# the whole file; 4 MiB sits comfortably in the 8 MiB heap.
+CONFIG_SYS_DFU_MAX_FILE_SIZE=0x02000000
+CONFIG_SYS_DFU_DATA_BUF_SIZE=0x00400000
+CONFIG_CMD_MTDPARTS=y
+CONFIG_UPDATE_COMMON=y
+CONFIG_DFU_WRITE_ALT=y
+# DFU needs the DM gadget path: without it the MUSB controller is never registered and "dfu 0" fails at once
+CONFIG_DM_USB_GADGET=y
+# no console: serial_init aborts on this board and the pads are not reachable
+# CONFIG_REQUIRE_SERIAL_CONSOLE is not set
+# keep the top 2 MB of DRAM untouched: the kernel logs its DEBUG_LL ring + ramoops at
+# 0x83e00000..0x83f00000 and we read it back with `dfu-util -a ring -U` after a failed boot
+CONFIG_SYS_MEM_TOP_HIDE=0x200000
+# the design passes bootargs/memory via ATAGs (kernel ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND)
+CONFIG_SUPPORT_PASSING_ATAGS=y
+CONFIG_CMDLINE_TAG=y
+CONFIG_SETUP_MEMORY_TAGS=y
+# the env (bootcmd/usbinstall) uses `;` chains and `||`: without the hush parser
+# `bootz 0x80A00000 || reset` passed "||" and "reset" to bootz as ramdisk/FDT
+# addresses (FDT address 0 -> data abort -> reset). Found 2026-11-22 via a USB-ACM console.
+CONFIG_HUSH_PARSER=y
+# debug console on demand over USB (CDC ACM, /dev/ttyACM0): see the bootcmd flag in nest_j49.env
+CONFIG_USB_FUNCTION_ACM=y
+CONFIG_CMD_CACHE=y
+# U-Boot must NOT enable the OMAP3 L2 cache (v7_outer_cache_enable via SMC): the kernel
+# zImage decompressor only flushes L1, relocates itself with caches on and then reads with the MMU off,
+# which sees stale DRAM behind a dirty L2 -> "LZMA data is corrupt / System halted" (seen 2026-11-23 in the
+# DEBUG_LL ring). The kernel enables L2 itself.
+CONFIG_SYS_L2CACHE_OFF=y

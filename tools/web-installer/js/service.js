@@ -1,0 +1,201 @@
+// The service on the thermostat: `nandio` (tools/dfu-install/nandio/nandio.c) in the rescue
+// kernel, on the USB serial port. With it the installer makes a backup, writes our U-Boot and
+// puts a backup back. The protocol is described at the top of nandio.c.
+//
+// A backup file is the same stream nandio sends, with a text line before each partition:
+//   J49BACKUP 1
+//   INFO <json: date, partitions>
+//   PART <name> <size> <erasesize>
+//     one frame per erase block: 'D' + data | 'E' (empty) | 'B' (bad) | 'X' + data (read error)
+//   SUM <crc32 hex of the data in D and X frames>
+//   ...
+//   END
+
+const enc = new TextEncoder(), dec = new TextDecoder();
+let table = null;
+export function crc32(data, crc = 0) {
+  if (!table) {
+    table = new Uint32Array(256);
+    for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+  }
+  crc = ~crc >>> 0;
+  for (let i = 0; i < data.length; i++) crc = table[(crc ^ data[i]) & 0xff] ^ (crc >>> 8);
+  return ~crc >>> 0;
+}
+const hex8 = n => (n >>> 0).toString(16).padStart(8, "0");
+
+/** Bytes that come in pieces, read back as exact counts and lines. `pull()` gives the next
+ *  piece (Uint8Array) or null at the end. */
+export class ByteReader {
+  constructor(pull) { this.pull = pull; this.buf = new Uint8Array(0); this.pos = 0; }
+  async fill() {
+    const more = await this.pull();
+    if (!more) throw new Error("the connection ended");
+    const rest = this.buf.subarray(this.pos);
+    const b = new Uint8Array(rest.length + more.length); b.set(rest); b.set(more, rest.length);
+    this.buf = b; this.pos = 0;
+  }
+  async bytes(n) {
+    while (this.buf.length - this.pos < n) await this.fill();
+    const out = this.buf.slice(this.pos, this.pos + n); this.pos += n; return out;
+  }
+  async byte() { return (await this.bytes(1))[0]; }
+  async line() {
+    for (;;) {
+      const i = this.buf.indexOf(10, this.pos);
+      if (i >= 0) { const s = dec.decode(this.buf.subarray(this.pos, i)).replace(/\r$/, ""); this.pos = i + 1; return s; }
+      if (this.buf.length - this.pos > 4096) throw new Error("no line end where one was expected");
+      await this.fill();
+    }
+  }
+}
+
+/** The partitions that are not written when a backup goes back: the first-stage loader that
+ *  the boot ROM reads (nothing we do changes it) and the alias of the whole chip. */
+export const NEVER_WRITTEN = ["ipl", "nand0"];
+
+export class Service {
+  /** reader: a ByteReader on the port; write(Uint8Array): send bytes to the port. */
+  constructor(reader, write, log = () => {}) { this.r = reader; this.write = write; this.log = log; }
+  send(text) { return this.write(enc.encode(text + "\n")); }
+  /** A line that is not the start-up banner; "ERR ..." becomes an exception. */
+  async answer() {
+    for (;;) {
+      const l = await this.r.line();
+      if (l.startsWith("J49NANDIO") || l === "") continue;
+      if (l.startsWith("ERR")) throw new Error("the thermostat reports: " + l.slice(4));
+      return l;
+    }
+  }
+  /** Wait for the service and ask what partitions there are: [{name, size, erasesize}]. */
+  async info() {
+    await this.send("INFO");
+    const parts = [];
+    for (;;) {
+      const l = await this.answer();
+      if (l === "OK") break;
+      const f = l.split(" ");
+      if (f[0] === "MTD" && f.length === 4) parts.push({ name: f[1], size: +f[2], erasesize: +f[3] });
+    }
+    if (!parts.length) throw new Error("the thermostat reports no partitions");
+    this.parts = parts;
+    return parts;
+  }
+  /** Read one partition. frame(kind, data|null) is called per erase block. Returns counts. */
+  async read(name, frame) {
+    await this.send("READ " + name);
+    const f = (await this.answer()).split(" ");
+    if (f[0] !== "DATA") throw new Error("unexpected answer: " + f.join(" "));
+    const size = +f[1], erase = +f[2];
+    let crc = 0; const n = { D: 0, E: 0, B: 0, X: 0 };
+    for (let off = 0; off < size; off += erase) {
+      const kind = String.fromCharCode(await this.r.byte());
+      if (!(kind in n)) throw new Error("unexpected data from the thermostat");
+      n[kind]++;
+      let data = null;
+      if (kind === "D" || kind === "X") { data = await this.r.bytes(erase); crc = crc32(data, crc); }
+      await frame(kind, data);
+    }
+    const sum = await this.answer();
+    if (sum !== "SUM " + hex8(crc)) throw new Error("checksum of " + name + " does not match: the transfer was damaged");
+    if ((await this.answer()) !== "OK") throw new Error("no OK after " + name);
+    return { size, erasesize: erase, crc, blocks: n };
+  }
+  /** Write frames ([data|null, ...], one per erase block) to a partition. mode: "shift" for a
+   *  new image, "exact" for a backup of this device. progress(done, total). */
+  async writeFrames(name, frames, mode, progress = () => {}) {
+    const part = (this.parts || []).find(p => p.name === name);
+    if (!part) throw new Error("the thermostat has no partition " + name);
+    if (frames.length * part.erasesize > part.size) throw new Error(name + ": the image is larger than the partition");
+    await this.send("WRITE " + name + " " + frames.length * part.erasesize + " " + mode);
+    const ready = await this.answer();
+    if (!ready.startsWith("READY")) throw new Error("unexpected answer: " + ready);
+    let crc = 0, skipped = 0;
+    for (let i = 0; i < frames.length; i++) {
+      const data = frames[i];
+      if (data) {
+        const m = new Uint8Array(1 + data.length); m[0] = 68; m.set(data, 1); // 'D'
+        await this.write(m);
+      } else {
+        await this.write(Uint8Array.of(69)); // 'E'
+      }
+      const ans = await this.r.byte();
+      if (ans === 98) skipped++;                    // 'b': bad block, left out
+      else if (ans !== 46) throw new Error("unexpected answer while writing " + name);
+      else if (data) crc = crc32(data, crc);
+      progress(i + 1, frames.length);
+    }
+    const sum = await this.answer();
+    if (sum !== "SUM " + hex8(crc)) throw new Error(name + ": what was read back differs from what was sent");
+    if ((await this.answer()) !== "OK") throw new Error("no OK after writing " + name);
+    return { skipped };
+  }
+  /** Write an image (Uint8Array) as a new image: padded with 0xFF to whole erase blocks. */
+  async writeImage(name, image, progress) {
+    const part = (this.parts || []).find(p => p.name === name);
+    if (!part) throw new Error("the thermostat has no partition " + name);
+    const frames = [];
+    for (let off = 0; off < image.length; off += part.erasesize) {
+      const b = new Uint8Array(part.erasesize).fill(0xff);
+      b.set(image.subarray(off, Math.min(off + part.erasesize, image.length)));
+      frames.push(b);
+    }
+    return this.writeFrames(name, frames, "shift", progress);
+  }
+  async reboot() { await this.send("REBOOT"); try { await this.answer(); } catch (e) { /* it may be gone */ } }
+
+  /** A full backup: every partition except the alias of the whole chip, written with sink(bytes).
+   *  progress(doneBytes, totalBytes, name). Returns a summary per partition. */
+  async backup(sink, progress = () => {}, meta = {}) {
+    const parts = (this.parts || await this.info()).filter(p => p.name !== "nand0");
+    const total = parts.reduce((n, p) => n + p.size, 0);
+    let done = 0; const summary = [];
+    await sink(enc.encode("J49BACKUP 1\nINFO " + JSON.stringify({ ...meta, partitions: parts }) + "\n"));
+    for (const p of parts) {
+      await sink(enc.encode("PART " + p.name + " " + p.size + " " + p.erasesize + "\n"));
+      const r = await this.read(p.name, async (kind, data) => {
+        await sink(Uint8Array.of(kind.charCodeAt(0)));
+        if (data) await sink(data);
+        done += p.erasesize; progress(done, total, p.name);
+      });
+      await sink(enc.encode("SUM " + hex8(r.crc) + "\n"));
+      summary.push({ name: p.name, ...r.blocks });
+      this.log(p.name + ": " + r.blocks.D + " blocks with data, " + r.blocks.E + " empty" + (r.blocks.B ? ", " + r.blocks.B + " bad" : "") + (r.blocks.X ? ", " + r.blocks.X + " WITH READ ERRORS" : ""));
+    }
+    await sink(enc.encode("END\n"));
+    return summary;
+  }
+}
+
+/** Read a backup file through a ByteReader. Yields {name, size, erasesize, frames} per
+ *  partition, the checksum checked; frames is [data|null] ready for writeFrames("exact"). */
+export async function* readBackup(reader) {
+  if ((await reader.line()) !== "J49BACKUP 1") throw new Error("this is not a J49 backup file");
+  const info = await reader.line();
+  if (!info.startsWith("INFO ")) throw new Error("damaged backup file (no INFO)");
+  yield { info: JSON.parse(info.slice(5)) };
+  for (;;) {
+    const l = await reader.line();
+    if (l === "END") return;
+    const f = l.split(" ");
+    if (f[0] !== "PART" || f.length !== 4) throw new Error("damaged backup file (no PART)");
+    const size = +f[2], erasesize = +f[3];
+    if (!(erasesize > 0) || size % erasesize) throw new Error("damaged backup file (sizes)");
+    const frames = []; let crc = 0, errors = 0;
+    for (let off = 0; off < size; off += erasesize) {
+      const kind = String.fromCharCode(await reader.byte());
+      if (kind === "D" || kind === "X") { const d = await reader.bytes(erasesize); crc = crc32(d, crc); frames.push(d); if (kind === "X") errors++; }
+      else if (kind === "E" || kind === "B") frames.push(null);
+      else throw new Error("damaged backup file (frame)");
+    }
+    if ((await reader.line()) !== "SUM " + hex8(crc)) throw new Error("damaged backup file: checksum of " + f[1]);
+    yield { name: f[1], size, erasesize, frames, errors };
+  }
+}
+
+/** Check a backup file without a device: every checksum, and that it ends. Returns the list. */
+export async function verifyBackup(reader) {
+  const out = [];
+  for await (const p of readBackup(reader)) if (p.name) out.push({ name: p.name, size: p.size, data: p.frames.filter(Boolean).length, errors: p.errors });
+  return out;
+}

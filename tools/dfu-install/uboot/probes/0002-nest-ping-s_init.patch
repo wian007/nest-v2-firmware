@@ -1,0 +1,47 @@
+--- a/arch/arm/mach-omap2/omap3/board.c	2026-11-21 23:15:50.479051905 +0100
++++ b/arch/arm/mach-omap2/omap3/board.c	2026-11-21 23:15:50.492896694 +0100
+@@ -187,24 +187,44 @@
+  * Description: Does early system init of muxing and clocks.
+  *              - Called path is with SRAM stack.
+  *****************************************************************************/
++
++/* NEST PROBE: blind progress marker. Waits 2 s on the always-running
++ * 32 kHz sync timer; the time until the ROM reappears after the push
++ * tells how many pings were passed before the exception/reset. */
++static inline void nest_ping(void)
++{
++	volatile unsigned int *t = (volatile unsigned int *)0x48320010;
++	unsigned int t0 = *t;
++	while ((*t - t0) < 65536)
++		;
++}
++
+ void s_init(void)
+ {
++	nest_ping(); /* 1 */
+ 	watchdog_init();
++	nest_ping(); /* 2 */
+ 	early_system_init();
++	nest_ping(); /* 3 */
+ 
+ 	try_unlock_memory();
++	nest_ping(); /* 4 */
+ 
+ #ifndef CONFIG_SYS_L2CACHE_OFF
+ 	/* Invalidate L2-cache from secure mode */
+ 	omap3_invalidate_l2_cache_secure();
+ #endif
++	nest_ping(); /* 5 */
+ 
+ 	set_muxconf_regs();
++	nest_ping(); /* 6 */
+ 	sdelay(100);
+ 
+ 	prcm_init();
++	nest_ping(); /* 7 */
+ 
+ 	per_clocks_enable();
++	nest_ping(); /* 8 */
+ 
+ #ifdef CONFIG_USB_EHCI_OMAP
+ 	ehci_clocks_enable();

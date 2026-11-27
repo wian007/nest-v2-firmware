@@ -1,0 +1,11 @@
+== /sys/kernel/debug/clock/apb_pclk ==
+== /sys/kernel/debug/clock/mcbsp_clks ==
+== /sys/kernel/debug/clock/omap_32k_fck ==
+== /sys/kernel/debug/clock/secure_32k_fck ==
+== /sys/kernel/debug/clock/sys_altclk ==
+== /sys/kernel/debug/clock/virt_12m_ck ==
+== /sys/kernel/debug/clock/virt_13m_ck ==
+== /sys/kernel/debug/clock/virt_16_8m_ck ==
+== /sys/kernel/debug/clock/virt_19_2m_ck ==
+== /sys/kernel/debug/clock/virt_26m_ck ==
+== /sys/kernel/debug/clock/virt_38_4m_ck ==

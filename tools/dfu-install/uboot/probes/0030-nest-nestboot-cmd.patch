@@ -1,0 +1,52 @@
+diff -uNr a2/cmd/Makefile b2/cmd/Makefile
+--- a2/cmd/Makefile	2026-11-22 22:40:27.746490393 +0100
++++ b2/cmd/Makefile	2026-11-22 22:40:27.748043754 +0100
+@@ -289,3 +289,4 @@
+ 	$(call filechk,data_size)
+ 
+ CFLAGS_ethsw.o := -Wno-enum-conversion
++obj-y += nestboot.o
+diff -uNr a2/cmd/nestboot.c b2/cmd/nestboot.c
+--- a2/cmd/nestboot.c	1970-01-01 01:00:00.000000000 +0100
++++ b2/cmd/nestboot.c	2026-11-22 22:45:38.189106631 +0100
+@@ -0,0 +1,40 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * nestboot <addr> -- minimal Linux zImage launcher for the Nest J49.
++ * Bypasses bootm/bootz (their state machine reset the board). This U-Boot
++ * runs with D-cache/MMU/I-cache OFF (cache maintenance faults on this
++ * board), so no flushing is needed: just ATAGs and a jump.
++ * r0=0, r1=machine id, r2=ATAGs (CORE, MEM 64M @0x80000000, NONE); the
++ * kernel has an appended DTB + built-in cmdline (ATAG_DTB_COMPAT).
++ * Progress words (run id 0x45) at 0x83ef0040.. survive a warm reset.
++ */
++#include <command.h>
++#include <vsprintf.h>
++#include <irq_func.h>
++#include <asm/io.h>
++
++#define W(a, v) (*(volatile unsigned int *)(a) = (unsigned int)(v))
++
++static int do_nestboot(struct cmd_tbl *cmdtp, int flag, int argc,
++		       char *const argv[])
++{
++	ulong kaddr = argc > 1 ? hextoul(argv[1], NULL) : 0x80A00000;
++	volatile unsigned int *p = (volatile unsigned int *)0x80000100;
++	void (*kernel)(int, int, unsigned int) = (void *)kaddr;
++
++	W(0x83ef0040, 0x45000001);                      /* entered nestboot */
++	p[0] = 2;          p[1] = 0x54410001;           /* ATAG_CORE */
++	p[2] = 4;          p[3] = 0x54410002;           /* ATAG_MEM  */
++	p[4] = 0x04000000; p[5] = 0x80000000;           /* 64 MB @ 0x80000000 */
++	p[6] = 0;          p[7] = 0;                    /* ATAG_NONE */
++	W(0x83ef0044, 0x45000002);                      /* ATAGs written */
++	disable_interrupts();
++	W(0x83ef0048, 0x45000003);                      /* about to jump */
++	kernel(0, 4082, 0x80000100);
++	W(0x83ef004c, 0x45000004);                      /* kernel returned */
++	return 0;
++}
++
++U_BOOT_CMD(nestboot, 2, 0, do_nestboot,
++	   "boot a Linux zImage directly (no bootm)",
++	   "[addr]  - jump to zImage at addr (default 0x80A00000)");

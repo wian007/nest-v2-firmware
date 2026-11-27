@@ -1,0 +1,15 @@
+[package]
+name = "j49-screen"
+version = "0.1.0"
+edition = "2021"
+description = "Thermostat screen for the Nest J49 round panel: a dial, a menu, the web login question"
+license = "MIT"
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"

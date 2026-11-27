@@ -1,0 +1,407 @@
+drm/panel: add Samsung S6D05A1 DPI panel driver (Tianma TM025ZDZ01, Nest J49)
+
+320x320 round-bezel module: S6D05A1 controller on McSPI1 (9-bit SPI, mode 3),
+pixels over 24-bit DPI from the OMAP3 DSS. Init sequence and timings from the
+stock 2.6.37 panel-tianma-tm025zdz01.c (MADCTL 0xd0 = rotated 180). Optional
+backlight phandle (drm_panel_of_backlight).
+
+Upstream-Status: Pending
+Signed-off-by: J49 project <j49@users.noreply.github.com>
+
+--- a/drivers/gpu/drm/panel/Kconfig	2026-10-28 20:56:33.741712738 +0100
++++ b/drivers/gpu/drm/panel/Kconfig	2026-10-28 20:53:27.493645296 +0100
+@@ -303,6 +303,14 @@
+ 	depends on BACKLIGHT_CLASS_DEVICE
+ 	select VIDEOMODE_HELPERS
+ 
++config DRM_PANEL_SAMSUNG_S6D05A1
++	tristate "Samsung S6D05A1 RGB panel (Tianma TM025ZDZ01, Nest j49)"
++	depends on GPIOLIB && OF && SPI && REGULATOR
++	help
++	  Say Y here if you want to enable support for the Samsung S6D05A1
++	  controlled 320x320 RGB panel of the Nest Learning Thermostat 2nd gen
++	  (Tianma TM025ZDZ01): 9-bit SPI control, 24-bit parallel RGB pixels.
++
+ config DRM_PANEL_LG_LB035Q02
+ 	tristate "LG LB035Q024573 RGB panel"
+ 	depends on GPIOLIB && OF && SPI
+--- a/drivers/gpu/drm/panel/Makefile	2026-10-28 20:56:34.435724897 +0100
++++ b/drivers/gpu/drm/panel/Makefile	2026-10-28 20:53:27.499448741 +0100
+@@ -28,6 +28,7 @@
+ obj-$(CONFIG_DRM_PANEL_LEADTEK_LTK050H3146W) += panel-leadtek-ltk050h3146w.o
+ obj-$(CONFIG_DRM_PANEL_LEADTEK_LTK500HD1829) += panel-leadtek-ltk500hd1829.o
+ obj-$(CONFIG_DRM_PANEL_LG_LB035Q02) += panel-lg-lb035q02.o
++obj-$(CONFIG_DRM_PANEL_SAMSUNG_S6D05A1) += panel-samsung-s6d05a1.o
+ obj-$(CONFIG_DRM_PANEL_LG_LG4573) += panel-lg-lg4573.o
+ obj-$(CONFIG_DRM_PANEL_MAGNACHIP_D53E6EA8966) += panel-magnachip-d53e6ea8966.o
+ obj-$(CONFIG_DRM_PANEL_NEC_NL8048HL11) += panel-nec-nl8048hl11.o
+--- /dev/null
++++ b/drivers/gpu/drm/panel/panel-samsung-s6d05a1.c
+@@ -0,0 +1,367 @@
++// SPDX-License-Identifier: GPL-2.0
++/*
++ * Samsung S6D05A1 RGB (DPI) panel controller, as found in the Tianma
++ * TM025ZDZ01 320x320 module of the Nest Learning Thermostat 2nd gen (j49).
++ *
++ * Control path: 9-bit SPI (D/CX + 8 data bits), SPI mode 3. Pixel path: 24-bit
++ * parallel RGB from the OMAP3 DSS. The initialisation sequence is the one the
++ * vendor 2.6.37 kernel sends (drivers/video/omap2/displays/panel-tianma-
++ * tm025zdz01.c), pre-encoded here. The controller's DC/DC booster runs from the
++ * external pixel clock (PWRCTL BOOST_CLK_SEL_EXT), so the whole command sequence
++ * is sent from .enable, after the CRTC has started the clock, exactly as the
++ * vendor driver did (omapdss_dpi_display_enable() before s6d05a1_power_on()).
++ */
++
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/module.h>
++#include <linux/regulator/consumer.h>
++#include <linux/spi/spi.h>
++
++#include <drm/drm_connector.h>
++#include <drm/drm_modes.h>
++#include <drm/drm_panel.h>
++
++#define S6D05A1_CMD(x)		((u16)(x))		/* D/CX = 0 */
++#define S6D05A1_PARAM(x)	((u16)(0x100 | (x)))	/* D/CX = 1 */
++
++#define S6D05A1_RDDPM		0x0a	/* power mode: BSTON(7) IDMON(6) PTLON(5) SLPOUT(4) NORON(3) DISON(2) */
++#define S6D05A1_RDDMADCTL	0x0b
++#define S6D05A1_RDDCOLMOD	0x0c
++#define S6D05A1_RDDIM		0x0d
++#define S6D05A1_RDDSM		0x0e
++#define S6D05A1_RDDSDR		0x0f	/* self-diagnostic: REG_LOADING(7) FUNC_DETECT(6) */
++#define S6D05A1_SLPIN		0x10
++#define S6D05A1_SLPOUT		0x11
++#define S6D05A1_DISPOFF		0x28
++#define S6D05A1_DISPON		0x29
++#define S6D05A1_CASET		0x2a
++#define S6D05A1_PASET		0x2b
++#define S6D05A1_MADCTL		0x36
++#define S6D05A1_IDMOFF		0x38
++#define S6D05A1_COLMOD		0x3a
++#define S6D05A1_RDID1		0xda
++#define S6D05A1_PASSWD1		0xf0
++#define S6D05A1_PASSWD2		0xf1
++#define S6D05A1_DISCTL		0xf2
++#define S6D05A1_PWRCTL		0xf4
++#define S6D05A1_VCMCTL		0xf5
++#define S6D05A1_SRCCTL		0xf6
++#define S6D05A1_IFCTL		0xf7
++#define S6D05A1_PANELCTL	0xf8
++#define S6D05A1_GAMMASEL	0xf9
++#define S6D05A1_PGAMMACTL	0xfa
++#define S6D05A1_NGAMMACTL	0xfb
++
++struct s6d05a1 {
++	struct drm_panel panel;
++	struct spi_device *spi;
++	struct regulator *vcc;
++	struct gpio_desc *reset;	/* active low */
++};
++
++#define to_s6d05a1(p) container_of(p, struct s6d05a1, panel)
++
++static int s6d05a1_send(struct s6d05a1 *lcd, u8 cmd, const u8 *params,
++			unsigned int n)
++{
++	u16 words[24];
++	struct spi_transfer xfer = {
++		.tx_buf = words,
++		.bits_per_word = 9,
++		.len = (n + 1) * sizeof(u16),
++	};
++	struct spi_message msg;
++	unsigned int i;
++	int ret;
++
++	if (WARN_ON(n + 1 > ARRAY_SIZE(words)))
++		return -EINVAL;
++
++	words[0] = S6D05A1_CMD(cmd);
++	for (i = 0; i < n; i++)
++		words[i + 1] = S6D05A1_PARAM(params[i]);
++
++	spi_message_init_with_transfers(&msg, &xfer, 1);
++	ret = spi_sync(lcd->spi, &msg);
++	if (ret < 0)
++		dev_warn(&lcd->spi->dev, "cmd %#02x failed: %d\n", cmd, ret);
++	return ret;
++}
++
++#define s6d05a1_cmd(lcd, cmd, ...)					\
++	({								\
++		static const u8 _p[] = { __VA_ARGS__ };			\
++		s6d05a1_send(lcd, cmd, _p, ARRAY_SIZE(_p));		\
++	})
++
++static int s6d05a1_read8(struct s6d05a1 *lcd, u8 cmd, u8 *val)
++{
++	u16 word = S6D05A1_CMD(cmd);
++	struct spi_transfer xfer[2] = {
++		{ .tx_buf = &word, .bits_per_word = 9, .len = 2 },
++		{ .rx_buf = val, .bits_per_word = 8, .len = 1 },
++	};
++	struct spi_message msg;
++
++	spi_message_init_with_transfers(&msg, xfer, 2);
++	return spi_sync(lcd->spi, &msg);
++}
++
++/*
++ * Vendor sequence for the 320x320 Tianma module, rotated 180 degrees (the
++ * panel is mounted upside down): MADCTL MY|MX|ML, RGB order. Vertical porches
++ * come from the mode below: vbp+vsw = 10, vfp = 8.
++ */
++static int s6d05a1_init(struct s6d05a1 *lcd)
++{
++	int ret;
++
++	ret = s6d05a1_cmd(lcd, S6D05A1_MADCTL, 0xd0);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_PASSWD1, 0x5a, 0x5a);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_PASSWD2, 0x5a, 0x5a);
++	/* DISCTL: NL=320 lines, NHW, line inversion, porches, PIHW */
++	ret |= s6d05a1_cmd(lcd, S6D05A1_DISCTL,
++			   0x27, 0x30, 0x03, 0x0a, 0x08, 0x08, 0x08, 0x00,
++			   0x08, 0x08, 0x00, 0x01, 0x00, 0x00, 0x54, 0x0a,
++			   0x08, 0x0a, 0x08);
++	/* PWRCTL: VCI1 2.58 V, booster clock external, GVD 4.5/4.1 V, BT 16.5/-8.25 V */
++	ret |= s6d05a1_cmd(lcd, S6D05A1_PWRCTL,
++			   0x08, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
++			   0x00, 0x66, 0x02, 0x00, 0x52, 0x02);
++	/* VCMCTL: VCMH 4.30 V, VML 5.40 V (partial: 3.30 / 3.90 V) */
++	ret |= s6d05a1_cmd(lcd, S6D05A1_VCMCTL,
++			   0x00, 0x5c, 0x5d, 0x00, 0x00, 0x04, 0x00, 0x00,
++			   0x04, 0x00, 0x2a, 0x21);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_SRCCTL,
++			   0x01, 0x00, 0x08, 0x03, 0x01, 0x01, 0x01, 0x00, 0x00);
++	/*
++	 * IFCTL: MX/BGR EOR, RGB interface mode, VSYNC/HSYNC active low,
++	 * DOTCLK inverted, ENABLE active low, big endian, RGB_DIV 4, SDO.
++	 */
++	ret |= s6d05a1_cmd(lcd, S6D05A1_IFCTL, 0x48, 0x81, 0x20, 0x12, 0x01);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_PANELCTL, 0x11, 0x00);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_GAMMASEL, 0x17);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_PGAMMACTL,
++			   0x00, 0x02, 0x00, 0x21, 0x2a, 0x2d, 0x2e, 0x22,
++			   0x28, 0x2f, 0x3c, 0x3f, 0x34, 0x00, 0x00, 0x00);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_NGAMMACTL,
++			   0x00, 0x02, 0x34, 0x3f, 0x3c, 0x2f, 0x28, 0x22,
++			   0x2e, 0x2d, 0x2a, 0x21, 0x00, 0x00, 0x00, 0x00);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_COLMOD, 0x77);		/* 24 bpp */
++	ret |= s6d05a1_cmd(lcd, S6D05A1_CASET, 0x00, 0x00, 0x01, 0x3f);
++	ret |= s6d05a1_cmd(lcd, S6D05A1_PASET, 0x00, 0x00, 0x01, 0x3f);
++	if (ret)
++		return -EIO;
++
++	ret = s6d05a1_send(lcd, S6D05A1_SLPOUT, NULL, 0);
++	msleep(120);
++	ret |= s6d05a1_send(lcd, S6D05A1_IDMOFF, NULL, 0);
++	ret |= s6d05a1_send(lcd, S6D05A1_DISPON, NULL, 0);
++	msleep(10);
++	return ret ? -EIO : 0;
++}
++
++static void s6d05a1_reset(struct s6d05a1 *lcd)
++{
++	/* deassert for a while (unknown initial state), assert >= 5 ms, deassert >= 120 ms */
++	gpiod_set_value_cansleep(lcd->reset, 0);
++	mdelay(2);
++	gpiod_set_value_cansleep(lcd->reset, 1);
++	mdelay(10);
++	gpiod_set_value_cansleep(lcd->reset, 0);
++	msleep(120);
++}
++
++static int s6d05a1_prepare(struct drm_panel *panel)
++{
++	struct s6d05a1 *lcd = to_s6d05a1(panel);
++	int ret;
++
++	ret = regulator_enable(lcd->vcc);
++	if (ret) {
++		dev_err(&lcd->spi->dev, "vcc enable failed: %d\n", ret);
++		return ret;
++	}
++	msleep(2);
++	s6d05a1_reset(lcd);
++	return 0;
++}
++
++static int s6d05a1_enable(struct drm_panel *panel)
++{
++	struct s6d05a1 *lcd = to_s6d05a1(panel);
++	u8 id[3] = {};
++	int ret;
++
++	ret = s6d05a1_init(lcd);
++	if (ret) {
++		dev_err(&lcd->spi->dev, "init sequence failed: %d\n", ret);
++		return ret;
++	}
++	s6d05a1_read8(lcd, S6D05A1_RDID1, &id[0]);
++	s6d05a1_read8(lcd, S6D05A1_RDID1 + 1, &id[1]);
++	s6d05a1_read8(lcd, S6D05A1_RDID1 + 2, &id[2]);
++	dev_info(&lcd->spi->dev, "S6D05A1 display on, ID %02x %02x %02x\n",
++		 id[0], id[1], id[2]);
++	/* hands-free check of the panel state (jump 49): expect RDDPM with SLPOUT|NORON|DISON (0x9c)
++	 * once the booster is up, and RDDSDR bit 7 set when the register load passed */
++	{
++		static const u8 regs[] = { S6D05A1_RDDPM, S6D05A1_RDDMADCTL, S6D05A1_RDDCOLMOD,
++					   S6D05A1_RDDIM, S6D05A1_RDDSM, S6D05A1_RDDSDR };
++		u8 st[ARRAY_SIZE(regs)] = {};
++		int i;
++
++		for (i = 0; i < ARRAY_SIZE(regs); i++)
++			s6d05a1_read8(lcd, regs[i], &st[i]);
++		dev_info(&lcd->spi->dev,
++			 "S6D05A1 status RDDPM=%02x MADCTL=%02x COLMOD=%02x IM=%02x SM=%02x SDR=%02x\n",
++			 st[0], st[1], st[2], st[3], st[4], st[5]);
++	}
++	return 0;
++}
++
++static int s6d05a1_disable(struct drm_panel *panel)
++{
++	struct s6d05a1 *lcd = to_s6d05a1(panel);
++
++	s6d05a1_send(lcd, S6D05A1_DISPOFF, NULL, 0);
++	s6d05a1_send(lcd, S6D05A1_SLPIN, NULL, 0);
++	msleep(34);			/* >= 2 frames */
++	return 0;
++}
++
++static int s6d05a1_unprepare(struct drm_panel *panel)
++{
++	struct s6d05a1 *lcd = to_s6d05a1(panel);
++
++	gpiod_set_value_cansleep(lcd->reset, 1);
++	regulator_disable(lcd->vcc);
++	return 0;
++}
++
++/* 7.18 MHz pixel clock, 320+16+2+16 x 320+8+2+8: ~60 Hz, as the vendor kernel */
++static const struct drm_display_mode s6d05a1_mode = {
++	.clock = 7180,
++	.hdisplay = 320,
++	.hsync_start = 320 + 16,
++	.hsync_end = 320 + 16 + 2,
++	.htotal = 320 + 16 + 2 + 16,
++	.vdisplay = 320,
++	.vsync_start = 320 + 8,
++	.vsync_end = 320 + 8 + 2,
++	.vtotal = 320 + 8 + 2 + 8,
++	.type = DRM_MODE_TYPE_DRIVER | DRM_MODE_TYPE_PREFERRED,
++	.flags = DRM_MODE_FLAG_NHSYNC | DRM_MODE_FLAG_NVSYNC,
++	.width_mm = 45,
++	.height_mm = 45,
++};
++
++static int s6d05a1_get_modes(struct drm_panel *panel,
++			     struct drm_connector *connector)
++{
++	struct drm_display_mode *mode;
++
++	mode = drm_mode_duplicate(connector->dev, &s6d05a1_mode);
++	if (!mode)
++		return -ENOMEM;
++	drm_mode_set_name(mode);
++	drm_mode_probed_add(connector, mode);
++
++	connector->display_info.width_mm = s6d05a1_mode.width_mm;
++	connector->display_info.height_mm = s6d05a1_mode.height_mm;
++	/*
++	 * Vendor DSS config: OMAP_DSS_LCD_IEO (enable active low) and
++	 * OMAP_DSS_LCD_IPC (pixel data driven on the falling clock edge, "so
++	 * that tENS/tENH are observed"), syncs on the default edge.
++	 */
++	connector->display_info.bus_flags = DRM_BUS_FLAG_DE_LOW |
++					    DRM_BUS_FLAG_PIXDATA_DRIVE_NEGEDGE |
++					    DRM_BUS_FLAG_SYNC_DRIVE_POSEDGE;
++	/*
++	 * SYNC_DRIVE_POSEDGE: the vendor DSS config had ONOFF=0, i.e. the syncs
++	 * change on the opposite clock edge from the data. omapdrm always uses
++	 * the RF bit (onoff=1), so ask for the rising edge explicitly; without
++	 * it the syncs move on the same (falling) edge the panel samples on.
++	 */
++	return 1;
++}
++
++static const struct drm_panel_funcs s6d05a1_funcs = {
++	.prepare = s6d05a1_prepare,
++	.enable = s6d05a1_enable,
++	.disable = s6d05a1_disable,
++	.unprepare = s6d05a1_unprepare,
++	.get_modes = s6d05a1_get_modes,
++};
++
++static int s6d05a1_probe(struct spi_device *spi)
++{
++	struct s6d05a1 *lcd;
++	int ret;
++
++	lcd = devm_kzalloc(&spi->dev, sizeof(*lcd), GFP_KERNEL);
++	if (!lcd)
++		return -ENOMEM;
++	spi_set_drvdata(spi, lcd);
++	lcd->spi = spi;
++
++	lcd->vcc = devm_regulator_get(&spi->dev, "vcc");
++	if (IS_ERR(lcd->vcc))
++		return dev_err_probe(&spi->dev, PTR_ERR(lcd->vcc), "no vcc regulator\n");
++
++	/* reset-gpios is active low; GPIOD_OUT_LOW = not in reset, as stock leaves it */
++	lcd->reset = devm_gpiod_get(&spi->dev, "reset", GPIOD_OUT_LOW);
++	if (IS_ERR(lcd->reset))
++		return dev_err_probe(&spi->dev, PTR_ERR(lcd->reset), "no reset gpio\n");
++
++	spi->mode |= SPI_MODE_3;
++	spi->bits_per_word = 9;
++	ret = spi_setup(spi);
++	if (ret < 0)
++		return dev_err_probe(&spi->dev, ret, "spi_setup failed\n");
++
++	drm_panel_init(&lcd->panel, &spi->dev, &s6d05a1_funcs, DRM_MODE_CONNECTOR_DPI);
++	/* Optional backlight phandle: drm_panel_enable()/disable() then switch it with the panel. */
++	ret = drm_panel_of_backlight(&lcd->panel);
++	if (ret)
++		return dev_err_probe(&spi->dev, ret, "failed to get backlight\n");
++	drm_panel_add(&lcd->panel);
++	dev_info(&spi->dev, "S6D05A1 panel registered (%u Hz SPI)\n", spi->max_speed_hz);
++	return 0;
++}
++
++static void s6d05a1_remove(struct spi_device *spi)
++{
++	struct s6d05a1 *lcd = spi_get_drvdata(spi);
++
++	drm_panel_remove(&lcd->panel);
++	drm_panel_disable(&lcd->panel);
++	drm_panel_unprepare(&lcd->panel);
++}
++
++static const struct of_device_id s6d05a1_of_match[] = {
++	{ .compatible = "samsung,s6d05a1" },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(of, s6d05a1_of_match);
++
++static const struct spi_device_id s6d05a1_ids[] = {
++	{ "s6d05a1", 0 },
++	{ /* sentinel */ }
++};
++MODULE_DEVICE_TABLE(spi, s6d05a1_ids);
++
++static struct spi_driver s6d05a1_driver = {
++	.probe = s6d05a1_probe,
++	.remove = s6d05a1_remove,
++	.id_table = s6d05a1_ids,
++	.driver = {
++		.name = "panel-samsung-s6d05a1",
++		.of_match_table = s6d05a1_of_match,
++	},
++};
++module_spi_driver(s6d05a1_driver);
++
++MODULE_DESCRIPTION("Samsung S6D05A1 RGB panel driver (Nest j49 / Tianma TM025ZDZ01)");
++MODULE_LICENSE("GPL");

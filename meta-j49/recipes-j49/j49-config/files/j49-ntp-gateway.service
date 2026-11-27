@@ -1,0 +1,11 @@
+[Unit]
+Description=J49: take the time from the router of the local network
+After=systemd-networkd.service wpa_supplicant@wlan0.service
+Wants=systemd-networkd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/j49-ntp-gateway
+
+[Install]
+WantedBy=multi-user.target

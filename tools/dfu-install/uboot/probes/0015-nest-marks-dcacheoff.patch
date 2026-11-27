@@ -1,0 +1,182 @@
+diff -uNr a/arch/arm/lib/bootm.c b/arch/arm/lib/bootm.c
+--- a/arch/arm/lib/bootm.c	2026-11-22 21:17:34.127468633 +0100
++++ b/arch/arm/lib/bootm.c	2026-11-22 21:28:31.749518119 +0100
+@@ -24,6 +24,7 @@
+ #include <image.h>
+ #include <u-boot/zlib.h>
+ #include <asm/byteorder.h>
++#include <nest_mark.h>
+ #include <linux/libfdt.h>
+ #include <mapmem.h>
+ #include <fdt_support.h>
+@@ -198,6 +199,7 @@
+ /* Subcommand: PREP */
+ static void boot_prep_linux(struct bootm_headers *images)
+ {
++	NEST_M(23);
+ 	char *commandline = env_get("bootargs");
+ 
+ 	if (CONFIG_IS_ENABLED(OF_LIBFDT) && IS_ENABLED(CONFIG_LMB) && images->ft_len) {
+@@ -353,7 +355,9 @@
+ 	debug("## Transferring control to Linux (at address %08lx)" \
+ 		"...\n", (ulong) kernel_entry);
+ 	bootstage_mark(BOOTSTAGE_ID_RUN_OS);
++	NEST_M(20);
+ 	announce_and_cleanup(fake);
++	NEST_M(21);
+ 
+ 	if (CONFIG_IS_ENABLED(OF_LIBFDT) && images->ft_len)
+ 		r2 = (unsigned long)images->ft_addr;
+@@ -368,7 +372,7 @@
+ 							  0, machid, r2);
+ 		} else
+ #endif
+-			kernel_entry(0, machid, r2);
++			{ NEST_M(22); NEST_W(0x83ef02a0, (unsigned int)kernel_entry); NEST_W(0x83ef02a4, r2); kernel_entry(0, machid, r2); }
+ 	}
+ #endif
+ }
+diff -uNr a/boot/bootm.c b/boot/bootm.c
+--- a/boot/bootm.c	2026-11-22 21:17:34.125630383 +0100
++++ b/boot/bootm.c	2026-11-22 21:28:31.747880041 +0100
+@@ -7,6 +7,7 @@
+ #ifndef USE_HOSTCC
+ #include <common.h>
+ #include <bootm.h>
++#include <nest_mark.h>
+ #include <bootstage.h>
+ #include <cli.h>
+ #include <command.h>
+@@ -998,6 +999,7 @@
+ 	ulong iflag = 0;
+ 	int ret = 0, need_boot_fn;
+ 
++	NEST_M(1);
+ 	images->state |= states;
+ 
+ 	/*
+@@ -1007,12 +1009,14 @@
+ 	if (states & BOOTM_STATE_START)
+ 		ret = bootm_start();
+ 
++	NEST_M(2); NEST_W(0x83ef0280, ret);
+ 	if (!ret && (states & BOOTM_STATE_PRE_LOAD))
+ 		ret = bootm_pre_load(bmi->addr_img);
+ 
+ 	if (!ret && (states & BOOTM_STATE_FINDOS))
+ 		ret = bootm_find_os(bmi->cmd_name, bmi->addr_img);
+ 
++	NEST_M(3); NEST_W(0x83ef0284, ret);
+ 	if (!ret && (states & BOOTM_STATE_FINDOTHER)) {
+ 		ulong img_addr;
+ 
+@@ -1022,6 +1026,7 @@
+ 				       bmi->conf_fdt);
+ 	}
+ 
++	NEST_M(4); NEST_W(0x83ef0288, ret);
+ 	if (IS_ENABLED(CONFIG_MEASURED_BOOT) && !ret &&
+ 	    (states & BOOTM_STATE_MEASURE))
+ 		bootm_measure(images);
+@@ -1029,7 +1034,9 @@
+ 	/* Load the OS */
+ 	if (!ret && (states & BOOTM_STATE_LOADOS)) {
+ 		iflag = bootm_disable_interrupts();
++		NEST_M(5);
+ 		ret = bootm_load_os(images, 0);
++		NEST_M(6); NEST_W(0x83ef028c, ret);
+ 		if (ret && ret != BOOTM_ERR_OVERLAP)
+ 			goto err;
+ 		else if (ret == BOOTM_ERR_OVERLAP)
+@@ -1057,16 +1064,19 @@
+ 	}
+ #endif
+ 
++	NEST_M(7); NEST_W(0x83ef0290, ret);
+ 	/* From now on, we need the OS boot function */
+ 	if (ret)
+ 		return ret;
+ 	boot_fn = bootm_os_get_boot_func(images->os.os);
++	NEST_M(13); NEST_W(0x83ef0298, (unsigned int)boot_fn); NEST_W(0x83ef02a8, images->os.os);
+ 	need_boot_fn = states & (BOOTM_STATE_OS_CMDLINE |
+ 			BOOTM_STATE_OS_BD_T | BOOTM_STATE_OS_PREP |
+ 			BOOTM_STATE_OS_FAKE_GO | BOOTM_STATE_OS_GO);
+ 	if (boot_fn == NULL && need_boot_fn) {
+ 		if (iflag)
+ 			enable_interrupts();
++		NEST_M(16);
+ 		printf("ERROR: booting os '%s' (%d) is not supported\n",
+ 		       genimg_get_os_name(images->os.os), images->os.os);
+ 		bootstage_error(BOOTSTAGE_ID_CHECK_BOOT_OS);
+@@ -1083,13 +1093,17 @@
+ 		/* For Linux OS do all substitutions at console processing */
+ 		if (images->os.os == IH_OS_LINUX)
+ 			flags = BOOTM_CL_ALL;
++		NEST_M(14);
+ 		ret = bootm_process_cmdline_env(flags);
++		NEST_M(15); NEST_W(0x83ef029c, ret);
+ 		if (ret) {
+ 			printf("Cmdline setup failed (err=%d)\n", ret);
+ 			ret = CMD_RET_FAILURE;
+ 			goto err;
+ 		}
++		NEST_M(8);
+ 		ret = boot_fn(BOOTM_STATE_OS_PREP, bmi);
++		NEST_M(9);
+ 	}
+ 
+ #ifdef CONFIG_TRACE
+@@ -1111,10 +1125,13 @@
+ 
+ 	/* Now run the OS! We hope this doesn't return */
+ 	if (!ret && (states & BOOTM_STATE_OS_GO))
++		NEST_M(10);
+ 		ret = boot_selected_os(BOOTM_STATE_OS_GO, bmi, boot_fn);
++		NEST_M(11);
+ 
+ 	/* Deal with any fallout */
+ err:
++	NEST_M(12); NEST_W(0x83ef0294, ret);
+ 	if (iflag)
+ 		enable_interrupts();
+ 
+diff -uNr a/cmd/bootz.c b/cmd/bootz.c
+--- a/cmd/bootz.c	2026-11-22 21:22:43.506228055 +0100
++++ b/cmd/bootz.c	2026-11-22 21:28:51.544389162 +0100
+@@ -5,6 +5,8 @@
+  */
+ 
+ #include <common.h>
++#include <nest_mark.h>
++void dcache_disable(void);
+ #include <bootm.h>
+ #include <command.h>
+ #include <image.h>
+@@ -76,11 +78,16 @@
+ 	struct bootm_info bmi;
+ 	int ret;
+ 
++	dcache_disable();
++	NEST_M(30);
+ 	/* Consume 'bootz' */
+ 	argc--; argv++;
+ 
+-	if (bootz_start(cmdtp, flag, argc, argv, &images))
++	if (bootz_start(cmdtp, flag, argc, argv, &images)) {
++		NEST_M(31);
+ 		return 1;
++	}
++	NEST_M(32);
+ 
+ 	/*
+ 	 * We are doing the BOOTM_STATE_LOADOS state ourselves, so must
+diff -uNr a/include/nest_mark.h b/include/nest_mark.h
+--- a/include/nest_mark.h	1970-01-01 01:00:00.000000000 +0100
++++ b/include/nest_mark.h	2026-11-22 21:28:31.751024734 +0100
+@@ -0,0 +1,6 @@
++#ifndef NEST_MARK_H
++#define NEST_MARK_H
++/* marks are written with the D-cache OFF (do_bootz calls dcache_disable) */
++#define NEST_W(a, v) do { *(volatile unsigned int *)(a) = (unsigned int)(v); } while (0)
++#define NEST_M(n) NEST_W(0x83ef0100 + 4 * (n), 0x6d000000 | (n))
++#endif

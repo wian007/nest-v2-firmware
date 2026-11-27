@@ -1,0 +1,13 @@
+[Unit]
+Description=J49 thermostat on MQTT with Home Assistant discovery (j49-mqtt)
+# Broker settings are in /var/lib/j49/mqtt.conf (on the device only). Without that file the
+# program waits and looks again every 30 s; with the network down it retries the same way.
+After=network.target bpd.service
+
+[Service]
+ExecStart=/usr/bin/j49-mqtt
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

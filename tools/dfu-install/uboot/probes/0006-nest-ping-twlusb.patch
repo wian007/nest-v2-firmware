@@ -1,0 +1,31 @@
+--- a/drivers/usb/phy/twl4030.c
++++ b/drivers/usb/phy/twl4030.c
+@@ -23,6 +23,7 @@
+  * ------------------------------------------------------------------------
+  */
+ 
++#include <nest_ping.h>
+ #include <twl4030.h>
+ #include <linux/delay.h>
+ 
+@@ -127,10 +128,13 @@
+ 	u8 clk, sts, pwr;
+ 
+ 	/* twl4030 ldo init */
++	nest_ping();
+ 	twl4030_usb_ldo_init();
++	nest_ping();
+ 
+ 	/* Enable the twl4030 phy */
+ 	twl4030_phy_power();
++	nest_ping();
+ 
+ 	/* Enable DPLL to access PHY registers over I2C */
+ 	clk = twl4030_usb_read(TWL4030_USB_PHY_CLK_CTRL);
+@@ -172,5 +176,6 @@
+ 	clk &= ~REQ_PHY_DPLL_CLK;
+ 	twl4030_usb_write(TWL4030_USB_PHY_CLK_CTRL, clk);
+ 
++	nest_ping();
+ 	return 0;
+ }

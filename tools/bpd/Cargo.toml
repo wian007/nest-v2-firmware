@@ -1,0 +1,15 @@
+[package]
+name = "bpd"
+version = "0.1.0"
+edition = "2021"
+description = "Nest J49 backplate (STM32 AMBER_BP) UART link: keepalive daemon, sniffer, frame sender"
+license = "MIT"
+
+[dependencies]
+libc = "0.2"
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

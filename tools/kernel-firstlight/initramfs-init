@@ -1,0 +1,291 @@
+#!/bin/sh
+# Nest J49 modern-kernel first-light init.
+# Primary (hands-free) visibility is RAMOOPS: every line written to /dev/kmsg is
+# captured by the pstore ram-console at 0x83e00000 (plus the DEBUG_LL DRAM ring at
+# 0x83e80000) and survives the warm reset, to be read back from stock via /dev/mem.
+# If a USB host is attached, a shell also comes up on the g_serial gadget.
+/bin/busybox mount -t proc none /proc 2>/dev/null
+/bin/busybox mount -t sysfs none /sys 2>/dev/null
+/bin/busybox mount -t devtmpfs none /dev 2>/dev/null
+/bin/busybox --install -s /bin 2>/dev/null
+export PATH=/bin
+
+log() { echo "NEST-FL: $*" > /dev/kmsg 2>/dev/null; echo "NEST-FL: $*"; }
+GRACE=${NEST_FL_GRACE:-90}
+
+# ---- hang recovery FIRST (lesson of jump 15: a stuck I2C probe in STAGE2 hung us
+# for 29 min until the autonomous cold reset, and the backstop was started after it).
+# 1. HW watchdog: omap_wdt is built in (j49.cfg); opening /dev/watchdog arms WDT2
+#    (60 s, nowayout). The pinger only pings while the main loop proves it is alive
+#    (heartbeat file < 40 s old) or a USB shell session (STAGE4) is running.
+# 2. Software backstop: warm reboot at GRACE+30 s unless STAGE4.
+touch /hb
+if [ -c /dev/watchdog ]; then
+  ( exec 3>/dev/watchdog
+    echo "NEST-FL: HW watchdog armed (/dev/watchdog, 60 s)" > /dev/kmsg
+    while :; do
+      if [ -e /stage4 ] || [ -e /netup ] || [ $(( $(date +%s) - $(stat -c %Y /hb) )) -lt 40 ]; then echo 1 >&3; fi
+      sleep 5
+    done ) &
+else
+  echo "NEST-FL: no /dev/watchdog -- software backstop only" > /dev/kmsg
+fi
+# Early module load (cmdline nest_fl_insmod=/a.ko[,/b.ko]): lets a driver that is built as a
+# module come up right after the watchdog is armed, i.e. before WiFi/display bring-up, so a
+# boot-time interaction (cpufreq-dt, jumps 60-70) is reproduced under watchdog cover.
+for m in $(tr ' ' '\n' < /proc/cmdline | sed -n 's/^nest_fl_insmod=//p' | tr ',' ' '); do
+  insmod "$m" 2>/tmp.insmod.err; echo "NEST-FL: early insmod $m rc=$? $(cat /tmp.insmod.err 2>/dev/null)" > /dev/kmsg
+done
+
+# Deadline polled from /proc/uptime: jump 37's OOM killer took the single `sleep` and the backstop
+# fired at 9 s (and `reboot -f` then failed to fork, so the HW watchdog ended the run at ~67 s).
+upt() { cut -d. -f1 /proc/uptime; }
+( DL=$(( $(upt) + GRACE + 30 )); while [ "$(upt)" -lt "$DL" ]; do sleep 5; done
+  [ -e /stage4 ] && exit 0; [ -e /netup ] && exit 0   # SSH-over-WiFi hold: the main loop caps it (NEST_FL_NET_MAX)
+  echo "NEST-FL: STAGE7 backstop: main loop stuck -> warm reboot to stock" > /dev/kmsg
+  sync; echo b > /proc/sysrq-trigger; reboot -f ) &
+
+# TWL4030 I2C history: every TWL/USB failure of jumps 8-17 was clk_disable_unused()
+# gating sys_clkout1 (= TWL HFCLKIN on this board); fixed in the kernel by
+# patches/0003. Deep cpuidle is fine with that fix (C3/C5 reached, jump 27) --
+# but jump 28, which also left runtime PM of I2C1 + the USB PHY at its default,
+# hung hard (no WDT reset, 29-min cold reset, DRAM lost). Known-good default is
+# therefore: runtime PM pinned on for those two, all C-states enabled.
+#   nest_fl_rpm    -> leave runtime PM at its default (re-test the jump-28 hang)
+#   nest_fl_c1only -> additionally keep only C1 (the old workaround, A/B tests)
+if ! grep -q nest_fl_rpm /proc/cmdline; then
+  for d in /sys/bus/platform/devices/48070000.i2c /sys/bus/platform/devices/48070000.i2c:twl@48:twl4030-usb; do
+    [ -w "$d/power/control" ] && echo on > "$d/power/control" && echo "NEST-FL: runtime-pm forced on: $d" > /dev/kmsg
+  done
+else echo "NEST-FL: runtime PM left at default (nest_fl_rpm)" > /dev/kmsg; fi
+if grep -q nest_fl_c1only /proc/cmdline; then
+  n=0; for st in /sys/devices/system/cpu/cpu0/cpuidle/state[1-9]*; do [ -w "$st/disable" ] && echo 1 > "$st/disable" && n=$((n+1)); done
+  echo "NEST-FL: cpuidle deep states disabled: $n (nest_fl_c1only)" > /dev/kmsg
+else echo "NEST-FL: cpuidle: all C-states enabled" > /dev/kmsg; fi
+cstates() { for st in /sys/devices/system/cpu/cpu0/cpuidle/state*; do printf "%s=%s/%s " "$(cat $st/name)" "$(cat $st/usage)" "$(cat $st/disable)"; done; }
+
+# I2C1 instrumentation: i2cprobe (tools/kernel-firstlight/i2cprobe.c) does the
+# same 2-message register read regmap-i2c does, straight on /dev/i2c-0 (= OMAP
+# I2C1, the TWL bus; stock numbers it i2c-1). Every call is wrapped in a hard
+# timeout; NO address scan (jump 15: the scan's first transfer raised
+# "Arbitration lost" and never returned).
+I2CP=/bin/i2cprobe; I2C=/dev/i2c-0
+dm() { devmem "$1" 32 2>/dev/null || echo ERR; }
+rd() { timeout -s KILL 3 $I2CP $I2C rd "$@" 2>&1 || echo "0x$2:TIMEOUT"; }
+i2cdiag() { echo "$(rd 0x48 0x00 3) | $(rd 0x49 0x81 3) | $(rd 0x4a 0x00 3) | $(rd 0x4b 0x45 5) | $(rd 0x4b 0x1c 3)"; }
+# interrupt counters: TWL PIH (SYS_NIRQ), I2C1, MUSB -- a storm shows up here first
+irqs() { awk '/i2c|twl|musb|4030|48070000|480ab000/ {printf "%s=%s ", $NF, $2}' /proc/interrupts 2>/dev/null; }
+
+log "STAGE1 userspace reached — $(uname -srm)"
+log "STAGE1 cmdline: $(cat /proc/cmdline)"
+log "STAGE1 uptime: $(cat /proc/uptime)"
+
+# g_serial binds the UDC at boot (built-in); the node exists with or without a host.
+i=0
+while [ ! -e /dev/ttyGS0 ] && [ $i -lt 100 ]; do i=$((i + 1)); sleep 0.1; done
+if [ -e /dev/ttyGS0 ]; then log "STAGE2 USB gadget serial ready (/dev/ttyGS0)"; else log "STAGE2 no ttyGS0 (gadget did not bind)"; fi
+
+# brief proof-of-life detail into the ram-console
+log "STAGE2 procs: $(ps 2>/dev/null | wc -l)  mem: $(grep MemTotal /proc/meminfo 2>/dev/null)"
+log "STAGE2 irqs: $(irqs)"
+# I2C1 controller setup as the 6.6 driver programmed it (OMAP4-style map, rev 4.4):
+# compare with stock's (realjump3.sh dumps 0x48070000 from stock at grab time).
+mount -t debugfs none /sys/kernel/debug 2>/dev/null
+log "STAGE2 I2C1 regs: SYSC=$(dm 0x48070010) CON=$(dm 0x480700a4) PSC=$(dm 0x480700b0) SCLL=$(dm 0x480700b4) SCLH=$(dm 0x480700b8) SYSTEST=$(dm 0x480700bc) BUFSTAT=$(dm 0x480700c0) IRQSTATUS_RAW=$(dm 0x48070024) fck=$(cat /sys/kernel/debug/clk/i2c1_fck/clk_rate 2>/dev/null) ick=$(cat /sys/kernel/debug/clk/i2c1_ick/clk_rate 2>/dev/null)"
+# probes run DETACHED (jump 16: a wedged transfer leaves i2cprobe in D state,
+# unkillable, and took the main loop + heartbeat down with it -> WDT reset at 60 s)
+( log "STAGE2 I2C $(i2cdiag)" ) &
+# GPIO banks as inherited from stock (DTS gpio1-6 ti,no-reset-on-init; USB session 2026-10-28
+# showed the hwmod init reset wipes every stock output: OE=0xFFFFFFFF). Pin runtime PM first,
+# an idled bank bus-faults on /dev/mem. Stock reference: bank2 OUT=0x24000400, bank4
+# OE=0xffff9e5f OUT=0x00006080, bank6 OE=0xfffdfffd OUT=0x00020000 (reference/stock-gpio-banks.bin).
+for g in 48310000 49050000 49052000 49054000 49056000 49058000; do echo on > /sys/bus/platform/devices/$g.gpio/power/control 2>/dev/null; done
+log "STAGE2 GPIO $(for g in 0x48310000 0x49050000 0x49052000 0x49054000 0x49056000 0x49058000; do printf '%s:OE=%s,OUT=%s,IN=%s ' "$g" "$(dm $((g+0x34)))" "$(dm $((g+0x3c)))" "$(dm $((g+0x38)))"; done)"
+# The other two I2C buses (stock: ring sensor 0x57 on I2C2, 0x36 on I2C3); detached + killable.
+( log "STAGE2 I2Cbus i2c-1(48072000): $(timeout -s KILL 8 $I2CP /dev/i2c-1 scan 2>&1 | tr '\n' ' ') | i2c-2(48060000): $(timeout -s KILL 8 $I2CP /dev/i2c-2 scan 2>&1 | tr '\n' ' ')" ) &
+# CM/PRM clock-enable state (compare with stock's dump from realjump3.sh): FCLKEN/ICLKEN
+# per domain, DPLL enables, sys_clkout1/2. Decoded offline by decode-clocks.py.
+cmregs() { for a in 0x48004a00 0x48004a08 0x48004a10 0x48004a18 0x48004e10 0x48005400 0x48005410 0x48004d00 0x48004d04 0x48004d40 0x48004d70 0x48004e00 0x48004e04 0x48004f00 0x48004f10 0x48005000 0x48005010 0x48004c00 0x48004c10 0x48004d30 0x48004d20 0x48004000 0x48004004 0x48004034 0x48004048 0x48004904 0x48004934 0x48004948 0x48004a14 0x48004a30 0x48004a34 0x48004a38 0x48004a48 0x48004b00 0x48004b10 0x48004b48 0x48004c30 0x48004c48 0x48004d34 0x48004d48 0x48004e30 0x48004e48 0x48004f30 0x48004f48 0x48005030 0x48005048 0x48005148 0x48005430 0x48005448; do printf "%s=%s " "$a" "$(dm $a)"; done; printf "PRM_CLKOUT_CTRL=%s PRM_CLKSRC_CTRL=%s PRM_CLKSETUP=%s " "$(dm 0x48307d70)" "$(dm 0x48307270)" "$(dm 0x48307258)"; }
+# (kmsg lines are capped at 1024 bytes: 49 registers do not fit on one line -> split)
+cmregs | tr ' ' '\n' | grep . | awk '{printf "%s ", $0} NR%12==0 {print ""} END {print ""}' | while read -r l; do [ -n "$l" ] && log "STAGE2 CMregs: $l"; done
+# raw copies of CM (8 KiB), PRM (8 KiB), I2C1 (4 KiB) into the post-mortem DRAM window at
+# +0x90000/+0x92000/+0x94000 (0x83e90000..): complete register state, decoded offline by
+# decode-clocks.py --raw. /dev/mem RAM writes are allowed (no STRICT_DEVMEM).
+# (read() on /dev/mem fails for IO space on ARM -> mmap-based memdump, then write() into RAM)
+/bin/memdump 0x48004000 0x2000 > /tmp.cm 2>/dev/null; /bin/memdump 0x48306000 0x2000 > /tmp.prm 2>/dev/null; /bin/memdump 0x48070000 0x1000 > /tmp.i2c 2>/dev/null
+if [ "$(stat -c %s /tmp.cm)" = 8192 ] && [ "$(stat -c %s /tmp.prm)" = 8192 ]; then
+  dd if=/tmp.cm of=/dev/mem bs=4096 seek=$((0x83e90000/4096)) 2>/dev/null; dd if=/tmp.prm of=/dev/mem bs=4096 seek=$((0x83e92000/4096)) 2>/dev/null; dd if=/tmp.i2c of=/dev/mem bs=4096 seek=$((0x83e94000/4096)) 2>/dev/null
+  log "STAGE2 raw CM/PRM/I2C1 copied to window +0x90000 ($(stat -c %s /tmp.cm)/$(stat -c %s /tmp.prm)/$(stat -c %s /tmp.i2c) bytes)"
+else log "STAGE2 raw register copy FAILED (cm=$(stat -c %s /tmp.cm 2>/dev/null) prm=$(stat -c %s /tmp.prm 2>/dev/null))"; fi
+# which clocks did clk_disable_unused (3.5 s) leave on/off? (TWL HFCLKIN / I2C path suspects)
+log "STAGE2 clocks: $(awk 'NR>3 && $0 ~ /clkout|i2c|32k|sys_ck|osc|mcbsp|gpt|per_48m|core_96m/ {gsub(/^ +/,""); printf "%s=%s/%s@%s ", $1, $2, $3, $5}' /sys/kernel/debug/clk/clk_summary 2>/dev/null | cut -c1-900)"
+# PRM voltage controller/processor state (stock leaves VP1/VP2 disabled, VOLTCTRL=0)
+log "STAGE2 PRM VC_SMPS_SA=$(dm 0x48307220) VC_CH_CONF=$(dm 0x48307234) VC_I2C_CFG=$(dm 0x48307238) VOLTCTRL=$(dm 0x48307250) VP1_CONFIG=$(dm 0x483072b0) VP2_CONFIG=$(dm 0x483072d0)"
+log "STAGE2 regulators: $(for r in /sys/class/regulator/regulator.*; do n=$(cat $r/name 2>/dev/null); [ -n "$n" ] && printf "%s=%s/%s " "$n" "$(cat $r/state 2>/dev/null)" "$(cat $r/microvolts 2>/dev/null)"; done)"  # inherited-from-stock LDO state (regulator_init_complete only turns consumer-less LDOs off at 30 s)
+# full clock tree (one kmsg line per clock: name=enable_cnt/prepare_cnt@rate) -- diffing a
+# run without clk_ignore_unused against one with it names the gated clock(s)
+awk 'NR>3 {gsub(/^ +/,""); print $1"="$2"/"$3"@"$5}' /sys/kernel/debug/clk/clk_summary 2>/dev/null | while read -r l; do echo "NEST-FL: CLK $l" > /dev/kmsg; done
+# Backlight experiment (cmdline token nest_fl_bl) -- OBSOLETE since jump 58: the lm3530_bl driver
+# (patch 0006, DT ti,lm3530) does all of this itself; kept only for A/B debugging.
+# Original note: stock's gpio177 is the lm3530 HWEN; the
+# controller answered at I2C3 0x36 only with HWEN high + VAUX1 on (USB session 3). Enable
+# I2C brightness mode at the stock max-current setting (GEN_CONFIG 0x10 = 0x11) and set
+# half brightness (BRT_CTRL 0xA0 = 0x40). Visible on the panel even without DSS.
+if grep -q nest_fl_bl /proc/cmdline; then
+  ( echo 689 > /sys/class/gpio/export 2>/dev/null; echo out > /sys/class/gpio/gpio689/direction; echo 1 > /sys/class/gpio/gpio689/value; sleep 0.5
+    log "STAGE2 BL gpio177=1 bank6 OUT=$(dm 0x4905803c) scan: $(timeout -s KILL 8 $I2CP /dev/i2c-2 scan 2>&1 | tr '\n' ' ')"
+    log "STAGE2 BL before: $(timeout -s KILL 3 $I2CP /dev/i2c-2 rd 0x36 0x10 1) $(timeout -s KILL 3 $I2CP /dev/i2c-2 rd 0x36 0xa0 1)"
+    # stock j49 lm3530 platform data: manual (I2C) mode, 29 mA full scale, exponential ramp -> GEN_CONFIG 0x1d,
+    # max_brightness 0x78 (jumps 39-47 used 0x11 = 19 mA full scale; backlight seen once, in jump 39)
+    # Full stock lm3530_init_registers() sequence: GEN_CONFIG without I2C_EN first, ALS off (the chip's
+    # power-on ALS_CONFIG is 0xac = ALS enabled), ramp 2 s/2 s, zones cleared, brightness 0, then I2C_EN last.
+    for kv in 0x10:0x1c 0x20:0x00 0x30:0x2d 0x40:0x00 0x41:0x00 0xa0:0x00 0x60:0x00 0x61:0x00 0x62:0x00 0x63:0x00 0x70:0x7f 0x71:0x66 0x72:0x4c 0x73:0x33 0x74:0x19; do
+      timeout -s KILL 3 i2cset -f -y 2 0x36 ${kv%:*} ${kv#*:}
+    done
+    timeout -s KILL 3 i2cset -f -y 2 0x36 0x10 0x1d; timeout -s KILL 3 i2cset -f -y 2 0x36 0xa0 0x78; sleep 0.3   # stock full brightness for the visual test
+    log "STAGE2 BL after:  $(timeout -s KILL 3 $I2CP /dev/i2c-2 rd 0x36 0x10 1) $(timeout -s KILL 3 $I2CP /dev/i2c-2 rd 0x36 0xa0 1) rc_set=$?" ) &
+fi
+# Backplate head-unit watchdog keepalive (cmdline token nest_fl_bpkeep). The backplate STM32
+# ("AMBER_BP") power-cycles the HU at ~29 min (jump 52: ~28.7 min) after kexec unless the head
+# unit keeps its reset-countdown topped up. Firmware decode (SP/bpfw/amber.bin, fcn.00014a8):
+# frame type 0xa1 (nlclient's "quiet message, max_sleep_seconds") routes to 0x1cfe, which reloads
+# the countdown [sl+0x2c] = min((payload_u16 if len==2 else 0x1c20) + 0x708, 0xffff); a non-zero
+# countdown keeps the firmware in its decrement branch and starves the 2160-tick (~29 min) hard
+# reset (which only runs while the countdown == 0). 6.6 never sent it -> reset. So beat a type-0xa1
+# frame on UART3 (6.6 = /dev/ttyS2) via bptool, payload max_sleep_seconds=600 (0x0258 -> LE 58 02),
+# every 15 s (well inside the ~2400-tick reload). (The earlier ASCII 'g' was wrong: that console is
+# on a separate STM32 USART not wired to the head unit.) WiFi-INDEPENDENT: touch /netup + /hold so
+# STAGE3's netheld() hold loop keeps us up to NEST_FL_HOLD_MAX with no network. Verdict from the
+# NEXT ramoops: survive past ~1740 s and exit via STAGE5 warm reboot (ramoops VALID) = keepalive
+# WORKS; a cold reset near ~1720 s with ramoops lost ("Last boot caused by Reset") = still reset.
+if grep -q nest_fl_bpkeep /proc/cmdline; then
+  ( : > /netup; : > /hold   # engage STAGE3 hold loop without WiFi (cap = NEST_FL_HOLD_MAX)
+    log "STAGE2 BPKEEP: beating backplate frame type 0xa1 (max_sleep=600) on /dev/ttyS2 every 15 s; held to ${NEST_FL_HOLD_MAX:-1500}s (no WiFi needed)"
+    # Prefer the Rust daemon (tools/bpd, same frame; what the Yocto image ships) when the
+    # initramfs carries it, else the original C bptool.
+    if [ -x /bin/bpd ]; then
+      setsid /bin/bpd keepalive /dev/ttyS2 --interval 15 --max-sleep 600 >/bpkeep.log 2>&1 &
+      echo "NEST-FL: BPKEEP bpd 0xa1 keepalive pid $!" > /dev/kmsg
+    else
+      setsid /bin/bptool beat /dev/ttyS2 a1 5802 15 999999 >/bpkeep.log 2>&1 &
+      echo "NEST-FL: BPKEEP bptool 0xa1 beat pid $!" > /dev/kmsg
+    fi ) &
+fi
+# WiFi (jump 34: WL1271 found on MMC2, "wlcore: loaded"): the firmware only boots when the
+# interface comes up. Detached + killable; results land in the log as "STAGE2 WIFI".
+( if [ -d /sys/class/net/wlan0 ]; then
+    timeout -s KILL 20 ip link set wlan0 up 2>&1 | head -2 | while read -r l; do log "STAGE2 WIFI ip: $l"; done
+    sleep 4
+    log "STAGE2 WIFI link: $(ip link show wlan0 2>&1 | tr -s ' ' | tr '\n' ' ')"
+    dmesg | grep -iE 'wl1271|wlcore|wl12xx|firmware' | tail -8 | cut -c1-200 | while read -r l; do log "STAGE2 WIFI dmesg: ${l#*] }"; done
+    # Association + DHCP + SSH (jump 37): stock's wpa_supplicant/iw/dropbear (glibc 2.19, staged by
+    # the pack script together with /etc/wpa.conf, host keys and authorized_keys -- none in git).
+    # dropbear runs pubkey-only (-s): recover5's root/admin probe must keep failing on 6.6.
+    if [ -x /sbin/wpa_supplicant ] && [ -f /etc/wpa.conf ]; then
+      mkdir -p /var/run/wpa_supplicant /dev/pts /tmp; mount -t devpts devpts /dev/pts 2>/dev/null
+      # jump 38: wpa_supplicant (stock v2.0) started fine but never associated and logged nothing
+      # after init -> first a kernel-side scan with iw, then the supplicant in debug mode.
+      SSID=$(sed -n 's/.*ssid="\(.*\)".*/\1/p' /etc/wpa.conf)
+      log "STAGE2 NET reg: $(timeout -s KILL 5 /usr/sbin/iw reg get 2>&1 | head -2 | tr -s ' \n\t' ' ' | cut -c1-120)"
+      log "STAGE2 NET irqs0: $(grep -iE 'wl1271|wlcore|wl12xx|mmc1' /proc/interrupts | tr -s ' ' | cut -c1-80 | tr '\n' '|')"
+      sc=$(timeout -s KILL 30 /usr/sbin/iw dev wlan0 scan 2>&1); rc=$?
+      log "STAGE2 NET scan rc=$rc bss=$(echo "$sc" | grep -c '^BSS') ours=$(echo "$sc" | grep -c "SSID: $SSID") $(echo "$sc" | grep -E '^BSS|freq:|signal:|SSID:|failed|rror' | tr -s ' \t\n' ' ' | cut -c1-600)"
+      # security of our AP (jump 45 saw it at -51 dBm but never associated): RSN/WPA IE, auth/cipher suites, PMF
+      log "STAGE2 NET ours: $(echo "$sc" | awk -v s="SSID: $SSID" '/^BSS/{p=0} $0 ~ s{p=1} p' | grep -E 'RSN|WPA:|Version|Group cipher|Pairwise|Authentication|Capabilities|capability|DS Param|HT|VHT' | tr -s ' \t\n' ' ' | cut -c1-500)"
+      /sbin/wpa_supplicant -B -d -Dnl80211 -iwlan0 -c/etc/wpa.conf -f/wpa.log -P/var/run/wpa.pid >/dev/null 2>&1; log "STAGE2 NET wpa_supplicant rc=$?"
+      n=0; while [ $n -lt 60 ]; do timeout -s KILL 5 /usr/sbin/iw dev wlan0 link 2>/dev/null | grep -q '^Connected' && break; sleep 1; n=$((n + 1)); done
+      log "STAGE2 NET assoc ${n}s: $(timeout -s KILL 5 /usr/sbin/iw dev wlan0 link 2>&1 | tr -s ' \n\t' ' ' | cut -c1-220)"
+      log "STAGE2 NET wpa_cli status: $(timeout -s KILL 5 /bin/wpa_cli -i wlan0 status 2>&1 | tr -s ' \n\t' ' ' | cut -c1-300)"
+      log "STAGE2 NET wpa_cli scan: $(timeout -s KILL 5 /bin/wpa_cli -i wlan0 scan_results 2>&1 | grep -E "$SSID|^bssid|FAIL|rror" | tr -s ' \n\t' ' ' | cut -c1-300)"
+      log "STAGE2 NET irqs: $(grep -iE 'wl1271|wlcore|wl12xx|mmc1|gpio' /proc/interrupts | tr -s ' ' | cut -c1-80 | tr '\n' '|')"
+      grep -E 'Trying to|CTRL-EVENT|SME|ssoc|nl80211: (Scan|Drv|Event|Failed|Could|Capab|Using|Add|Associ|Connect)|[Ss]can (res|trig|req)|Failed|failed|rror|State:|Driver|driver|No network|not found|reg' /wpa.log 2>/dev/null | tail -34 | cut -c1-170 | while read -r l; do log "STAGE2 NET wpa: $l"; done
+      if [ $n -lt 60 ]; then
+        timeout -s KILL 45 udhcpc -i wlan0 -n -q -t 8 -T 3 -s /usr/share/udhcpc/default.script >/dev/null 2>&1; log "STAGE2 NET udhcpc rc=$?"
+        IP=$(ip -4 addr show wlan0 2>/dev/null | awk '/inet /{print $2}'); GW=$(ip route 2>/dev/null | awk '/^default/{print $3}')
+        log "STAGE2 NET ip=$IP gw=$GW ping_gw=$(ping -c1 -W2 $GW >/dev/null 2>&1 && echo ok || echo fail)"
+        if [ -n "$IP" ]; then
+          # jump 46: stock dropbear 2014.63 (static glibc 2.19) exits 1 from its own SIGSEGV handler on 6.6
+          # (crashes in crypto_init; same under qemu-user) -> static musl dropbear 2026.91 at /sbin/dropbear.
+          # -R generates an ed25519 host key if the stock RSA/ECDSA keys cannot be read.
+          /sbin/dropbear -s -E -p 22 -R -r /etc/dropbear/dropbear_rsa_host_key -r /etc/dropbear/dropbear_ecdsa_host_key 2>>/dropbear.log; rc=$?
+          : > /netup   # holds the device up for ssh root@$IP (pubkey) until NEST_FL_NET_MAX
+          log "STAGE2 NET dropbear rc=$rc pubkey-only listen=$(netstat -tln 2>/dev/null | grep -c ':22 '); holding up to ${NEST_FL_NET_MAX:-900}s for ssh root@${IP%/*}"
+          [ -s /dropbear.log ] && log "STAGE2 NET dropbear log: $(tail -4 /dropbear.log | tr -s ' \n' ' ' | cut -c1-300)"
+          sleep 5; log "STAGE2 NET ping_gw retry=$(ping -c1 -W2 $GW >/dev/null 2>&1 && echo ok || echo fail) dropbear_pid=$(pidof dropbear || echo none)"
+        fi
+      fi
+    else log "STAGE2 NET: no wpa_supplicant/wpa.conf staged"; fi
+  else log "STAGE2 WIFI: no wlan0 ($(ls /sys/class/net | tr '\n' ' '))"; fi ) &
+( sleep 3
+  log "STAGE2 FB: $(ls /dev/fb* /dev/dri 2>/dev/null | tr '\n' ' ') $(for f in /sys/class/graphics/fb0/name /sys/class/graphics/fb0/virtual_size /sys/class/graphics/fb0/bits_per_pixel /sys/class/graphics/fb0/stride; do [ -e $f ] && printf '%s=%s ' ${f##*/} "$(cat $f)"; done)"
+  dmesg | grep -iE 'omapdrm|omapdss|omap_dss|dispc|s6d05a1|panel|drm|fb0|fbcon|dpi|vaux2|vpll2|mcspi' | tail -14 | cut -c1-170 | while read -r l; do log "STAGE2 FB dmesg: ${l#*] }"; done
+  if [ -c /dev/fb0 ] && grep -q nest_fl_bpkeep /proc/cmdline && [ -x /fbanim ]; then
+    # keepalive mode: give the round panel the live animation (rotating rainbow + 29:00 progress
+    # ring that turns green past the backplate watchdog window). Unbind fbcon (console=tty0) first
+    # so it does not draw over us, then hand /dev/fb0 to fbanim for the rest of the session.
+    sleep 10   # wait for the backlight block (gpio177 + lm3530) so the panel is lit
+    echo 0 > /sys/class/vtconsole/vtcon1/bind 2>/dev/null && log "STAGE2 FB: fbcon unbound"
+    log "STAGE2 FB: nest_fl_bpkeep -> fbanim keepalive display"
+    /fbanim >/dev/null 2>&1 &
+  elif [ -c /dev/fb0 ]; then
+    # unmistakable visual test (XRGB8888, 320x320x4 = 409600 bytes): white 6 s, then red/green/blue 4 s each
+    fill() { printf "$1" > /fbpx; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17; do cat /fbpx /fbpx > /fbpx2; mv /fbpx2 /fbpx; done; head -c 409600 /fbpx > /dev/fb0; }
+    sleep 10   # wait for the backlight block (gpio177 + lm3530) so the colours are lit
+    fill '\377\377\377\377'; log "STAGE2 FB: WHITE"; sleep 6
+    fill '\000\000\377\000'; log "STAGE2 FB: RED"; sleep 4
+    fill '\000\377\000\000'; log "STAGE2 FB: GREEN"; sleep 4
+    fill '\377\000\000\000'; log "STAGE2 FB: BLUE"; sleep 4
+    dd if=/dev/zero of=/dev/fb0 bs=4096 count=100 2>/dev/null
+    echo "NEST-FL 6.6 on the panel $(cat /proc/uptime | cut -d' ' -f1)s" > /dev/tty0 2>/dev/null
+    log "STAGE2 FB: colour bars done, banner on tty0"
+  fi ) &
+log "STAGE2 mem: $(awk '/MemTotal|MemFree|MemAvailable|Shmem:/ {printf "%s%s ", $1, $2}' /proc/meminfo) cma=$(grep -o 'cma=[^ ]*' /proc/cmdline)"
+log "STAGE3 entering shell loop; self-reboot to stock after ${GRACE}s unless a USB host shows up"
+
+# LESSON (jump 3, 2026-10-27): the stock-armed HW watchdog does NOT save us
+# (kexec's device_shutdown() disables it). So: unless a USB host shows up within
+# the grace period, WARM-reboot ourselves back to stock. A warm reset keeps DRAM,
+# so the ring + ramoops survive for readback. If a host is attached, it gets a
+# shell and we stay up. Since jump 16 the kernel arms its own WDT2 (see top).
+T0=$(upt); t=0
+while true; do
+  touch /hb
+  if [ -e /dev/ttyGS0 ] && [ -n "$(cat /sys/class/udc/*/state 2>/dev/null | grep -i configured)" ]; then
+    : > /stage4
+    log "STAGE4 USB host present -> interactive shell on ttyGS0 (session capped at ${NEST_FL_USB_MAX:-1200}s: off-base we run on battery)"
+    ( DL=$(( $(upt) + ${NEST_FL_USB_MAX:-1200} )); while [ "$(upt)" -lt "$DL" ]; do sleep 5; done; echo "NEST-FL: STAGE6 USB session cap reached -> warm reboot to stock" > /dev/kmsg; sync; echo b > /proc/sysrq-trigger; reboot -f ) &
+    setsid sh -c 'exec sh </dev/ttyGS0 >/dev/ttyGS0 2>&1' 2>/dev/null
+  fi
+  sleep 2; t=$(( $(upt) - T0 ))
+  # SSH-over-WiFi hold (jump 37): once dropbear is reachable (/netup) stay up until NEST_FL_NET_MAX
+  # (3600 s with /hold touched over ssh), with quieter logging so ramoops is not flooded.
+  # jump 52: every session that outlives ~28.7 min ends in a cold reset ("Last boot caused by Reset",
+  # ramoops lost) while the battery ADC stays flat -> it is the backplate STM32 resetting the head unit
+  # it has not heard from since the kexec ("reset the HU now" in its firmware), not the battery.
+  # Caps stay below that so we leave with a warm reboot and the DRAM logs intact.
+  netheld() { [ -e /netup ] || return 1; cap=${NEST_FL_NET_MAX:-900}; [ -e /hold ] && cap=${NEST_FL_HOLD_MAX:-1500}; [ "$t" -lt "$cap" ]; }
+  if [ "$t" -gt "$GRACE" ] && netheld; then
+    [ $((t % 30)) -eq 0 ] && log "STAGE3 held for ssh $(cat /proc/uptime | cut -d' ' -f1)s cap=${cap}s load=$(cut -d' ' -f1 /proc/loadavg) ssh=$(netstat -tn 2>/dev/null | grep -c ':22 .*ESTABLISHED')"
+    [ $((t % 30)) -eq 0 ] && touch /hb
+    continue
+  fi
+  log "STAGE3 still alive $(cat /proc/uptime) (reboot to stock in $((GRACE - t))s unless USB host) load=$(cut -d' ' -f1 /proc/loadavg) D=$(ps 2>/dev/null | grep -c ' D ')"
+  log "irqs: $(irqs)"
+  [ $((t % 10)) -eq 0 ] && log "cstates: $(cstates)"
+  # one detached probe round per 4 s tick-pair; a hung round only costs its subshell
+  [ $((t % 4)) -eq 0 ] && ( log "I2C t=$t $(i2cdiag)" ) &
+  # late re-scan of I2C3: VAUX1 (always-on) feeds the 0x36 device but the 4.9 s scan missed it in jump 34
+  [ "$t" -eq 10 ] && ( log "STAGE3 I2Cbus late i2c-2: $(timeout -s KILL 8 $I2CP /dev/i2c-2 scan 2>&1 | tr '\n' ' ')" ) &
+  # Experiment (jump 16): 0x4b first fails right after the USB PHY is powered
+  # (musb bind -> twl4030_usb phy_init at ~4.4 s). Drop the PHY mid-run and see
+  # whether 0x4b comes back. Runs detached + timed so a hanging unbind cannot stall us.
+  if [ "$t" -eq "${NEST_FL_UNBIND_AT:-0}" ]; then  # off by default since jump 18 (PHY was not the culprit)
+    log "STAGE3 experiment: unbind musb-hdrc.0.auto + twl4030_usb (PHY off), watch 0x4b"
+    ( timeout -s KILL 10 sh -c 'echo musb-hdrc.0.auto > /sys/bus/platform/drivers/musb-hdrc/unbind' 2>/dev/null && echo "NEST-FL:   musb unbound" > /dev/kmsg
+      timeout -s KILL 10 sh -c 'echo 48070000.i2c:twl@48:twl4030-usb > /sys/bus/platform/drivers/twl4030_usb/unbind' 2>/dev/null && echo "NEST-FL:   twl4030_usb unbound" > /dev/kmsg ) &
+  fi
+  if [ "$t" -ge "$GRACE" ] && ! netheld; then
+    log "STAGE5 grace over, no USB host$([ -e /netup ] && echo ', ssh hold expired') -> warm reboot to stock (DRAM logs preserved)"
+    sync; echo b > /proc/sysrq-trigger 2>/dev/null; reboot -f
+  fi
+done

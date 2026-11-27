@@ -1,0 +1,28 @@
+From: J49 project <j49@users.noreply.github.com>
+Subject: [PATCH] ARM: OMAP2+: pdata-quirks: select the MMC2 loopback clock on the Nest J49
+
+The Nest Learning Thermostat 2nd gen (J49, OMAP3630) has its WL1271 on
+MMC2.  The stock firmware sets CONTROL_DEVCONF1.MMCSDIO2ADPCLKISEL
+(bit 6, "MMC2 loop back clock"); without it a cold boot of the mainline
+kernel ends in "mmc1: Failed to initialize a non-removable card" at
+1.6 s and WiFi never appears, while the same kernel works after a kexec
+from stock (the bit was still set).  Verified on the device: setting the
+bit from userspace and rebinding the host immediately gives "mmc1: new
+SDIO card at address 0001" and a working wlan0.
+
+Upstream-Status: Pending
+
+Reuse the existing hsmmc2_internal_input_clk() quirk, as the Nokia N9/N950
+(also WL1271 on MMC2) already do.
+---
+--- a/arch/arm/mach-omap2/pdata-quirks.c
++++ b/arch/arm/mach-omap2/pdata-quirks.c
+@@ -510,6 +510,8 @@
+ 	{ "nokia,omap3-n900", nokia_n900_legacy_init, },
+ 	{ "nokia,omap3-n9", hsmmc2_internal_input_clk, },
+ 	{ "nokia,omap3-n950", hsmmc2_internal_input_clk, },
++	/* Nest J49: WL1271 on MMC2 needs the internal loopback input clock (stock sets DEVCONF1 bit 6) */
++	{ "nest,j49", hsmmc2_internal_input_clk, },
+ 	{ "logicpd,dm3730-torpedo-devkit", omap3_logicpd_torpedo_init, },
+ 	{ "ti,omap3-evm-37xx", omap3_evm_legacy_init, },
+ 	{ "ti,am3517-evm", am3517_evm_legacy_init, },

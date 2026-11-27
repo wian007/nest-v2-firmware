@@ -1,0 +1,74 @@
+#!/bin/sh
+# netboot-init -- /init of the small kexec initramfs that fetches the Yocto image over WiFi.
+#
+# Jump 74 showed why the squashfs cannot travel inside the initrd: during the initramfs
+# unpack both the 15 MB initrd and its ramfs copy are resident next to a 20 MB kernel, and
+# the kernel OOM-panicked at 1.4 s with 11 MB unpacked. So this initramfs is ~3 MB: busybox,
+# a static wpa_supplicant and dropbear, the WiFi secrets and firmware. It associates, gets a
+# DHCP lease, starts dropbear (pubkey only) and waits for the host to push
+# /rootfs.squashfs over SSH and `touch /go` (tools: netpush.sh). Then it tears the network
+# down again (systemd owns it from here) and hands over to squash-init (/init-squash), which
+# loop-mounts the squashfs under a tmpfs overlay and switch_roots into systemd.
+# Everything goes to /dev/kmsg -> DEBUG_LL ring / ramoops for the post-mortem.
+k() { echo "NEST-NB: $*" > /dev/kmsg 2>/dev/null; echo "NEST-NB: $*"; }
+fail() { k "FAIL: $*"; sync; sleep 3; echo b > /proc/sysrq-trigger; sleep 5; reboot -f; }
+NB_MAX=${NB_MAX:-900}
+
+mount -t proc proc /proc 2>/dev/null
+mount -t sysfs sysfs /sys 2>/dev/null
+grep -q " /dev devtmpfs" /proc/mounts || mount -t devtmpfs devtmpfs /dev
+mkdir -p /dev/pts /var/run/wpa_supplicant /tmp /etc; mount -t devpts devpts /dev/pts 2>/dev/null
+k "start $(uname -r) uptime=$(cut -d' ' -f1 /proc/uptime) $(grep -E 'MemTotal|MemFree' /proc/meminfo | tr -s ' \n' ' ')"
+k "cmdline: $(cat /proc/cmdline)"
+
+# Memory hygiene for 64 MB (jump 76 OOM-killed everything with 16.5 MB free: the zone's
+# watermark had been BOOSTED to min=8984kB by fragmentation events, and the payload sat in
+# ramfs = unmovable pages that may not use the 8 MB CMA area).
+echo 0 > /proc/sys/vm/watermark_boost_factor
+echo "4096 65536 1048576" > /proc/sys/net/ipv4/tcp_rmem
+echo "4096 65536 1048576" > /proc/sys/net/ipv4/tcp_wmem
+mkdir -p /payload && mount -t tmpfs -o size=20m,mode=755 tmpfs /payload   # movable pages, CMA-eligible
+ln -sf /payload/rootfs.squashfs /rootfs.squashfs                           # what netpush writes / squash-init reads
+
+# Backstop: warm reboot (DRAM intact) if we have not handed over within NB_MAX s.
+( sleep "$NB_MAX"; [ -e /switched ] && exit 0
+  k "backstop: not switched after ${NB_MAX}s -> warm reboot"; sync; echo b > /proc/sysrq-trigger ) &
+
+# WiFi: wlan0 exists once wlcore has its NVS (in this initramfs); the firmware boots on `up`.
+n=0; while [ ! -d /sys/class/net/wlan0 ] && [ $n -lt 30 ]; do sleep 1; n=$((n + 1)); done
+[ -d /sys/class/net/wlan0 ] || fail "no wlan0 after 30 s: $(dmesg | grep -iE 'wl12xx|wlcore|nvs' | tail -3 | tr '\n' '|')"
+ip link set wlan0 up || fail "wlan0 up: $(dmesg | grep -iE 'wl12xx|wlcore|firmware' | tail -3 | tr '\n' '|')"
+sleep 2
+# Association is flaky on this radio: every boot so far logged 1..15 "authentication timed
+# out" (auth frames not ACKed) before one went through; jump 78 burned 90 s without luck.
+# So: up to 3 rounds of 100 s, with a WL1271 firmware restart (link down/up) in between.
+round=0; n=100
+while [ $round -lt 3 ]; do
+  /sbin/wpa_supplicant -B -Dnl80211 -iwlan0 -c/etc/wpa.conf -f/wpa.log -P/var/run/wpa.pid || fail "wpa_supplicant did not start"
+  n=0; while [ $n -lt 100 ]; do wpa_cli -i wlan0 status 2>/dev/null | grep -q '^wpa_state=COMPLETED' && break; sleep 1; n=$((n + 1)); done
+  k "round $round: assoc after ${n}s: $(wpa_cli -i wlan0 status 2>/dev/null | grep -E '^(wpa_state|bssid|freq)=' | tr '\n' ' ') auth_timeouts=$(dmesg | grep -c 'authentication with .* timed out')"
+  [ $n -lt 100 ] && break
+  kill $(cat /var/run/wpa.pid 2>/dev/null) 2>/dev/null; sleep 1
+  ip link set wlan0 down; sleep 2; ip link set wlan0 up; sleep 2   # firmware restart
+  round=$((round + 1))
+done
+[ $n -lt 100 ] || fail "no association in 3 rounds: $(grep -E 'CTRL-EVENT|timed' /wpa.log | tail -4 | tr '\n' '|')"
+udhcpc -i wlan0 -n -q -t 8 -T 3 -s /usr/share/udhcpc/default.script >/dev/null 2>&1 || fail "udhcpc"
+IP=$(ip -4 addr show wlan0 | awk '/inet /{print $2}'); GW=$(ip route | awk '/^default/{print $3}')
+k "net ip=$IP gw=$GW ping_gw=$(ping -c1 -W2 "$GW" >/dev/null 2>&1 && echo ok || echo fail)"
+/sbin/dropbear -s -E -p 22 -R -r /etc/dropbear/dropbear_rsa_host_key -r /etc/dropbear/dropbear_ecdsa_host_key 2>>/dropbear.log \
+  || k "dropbear rc=$? $(tail -2 /dropbear.log | tr '\n' '|')"
+k "waiting for the host to push /rootfs.squashfs + touch /go (ssh root@${IP%/*})"
+
+n=0; while [ ! -e /go ] && [ $n -lt $((NB_MAX - 120)) ]; do sleep 2; n=$((n + 2)); done
+[ -e /go ] || fail "no payload within ${n}s"
+[ -s /rootfs.squashfs ] || fail "/go without /rootfs.squashfs"
+k "payload: $(stat -c%s /rootfs.squashfs) bytes after ${n}s; $(grep MemFree /proc/meminfo | tr -s ' ')"
+
+# Hand the radio back in a clean state: systemd-networkd + wpa_supplicant@wlan0 start fresh.
+kill $(cat /var/run/wpa.pid 2>/dev/null) $(pidof dropbear udhcpc 2>/dev/null) 2>/dev/null
+sleep 1
+ip addr flush dev wlan0 2>/dev/null; ip link set wlan0 down 2>/dev/null
+k "network released; handing over to squash-init"
+: > /switched
+exec /init-squash

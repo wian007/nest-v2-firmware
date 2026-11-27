@@ -1,0 +1,12 @@
+[Unit]
+Description=J49 sleep manager: suspends the head unit when nothing needs it (j49-sleep)
+# Does nothing unless /var/lib/j49/sleep has enabled=on ("j49-sleep on", the web page, MQTT).
+After=bpd.service j49-screen.service network.target
+
+[Service]
+ExecStart=/usr/bin/j49-sleep run
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

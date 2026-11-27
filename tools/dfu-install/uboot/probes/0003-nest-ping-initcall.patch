@@ -1,0 +1,55 @@
+--- a/lib/initcall.c	2026-11-21 23:30:52.993018701 +0100
++++ b/lib/initcall.c	2026-11-21 23:30:53.003577839 +0100
+@@ -47,6 +47,44 @@
+  *
+  * To find a symbol, use grep on u-boot.map
+  */
++/* NEST PROBE: blind progress marker. Per initcall: wait 0.5 s on the always
++ * running 32 kHz sync timer, then re-arm WDT2 for ~20 s. Any hang therefore
++ * ends in a warm reset 20 s after the LAST ping, so (reset time - 20 s) / 0.5 s
++ * = number of initcalls started. */
++#define NEST_WD ((volatile unsigned int *)0x48314000)
++static inline void nest_wd_wait(unsigned int bit)
++{
++	int i;
++
++	for (i = 0; i < 200000 && (NEST_WD[0x34 / 4] & bit); i++)
++		;
++}
++
++static inline void nest_ping(void)
++{
++	volatile unsigned int *t = (volatile unsigned int *)0x48320010;
++	volatile unsigned int *cmf = (volatile unsigned int *)0x48004c00;
++	volatile unsigned int *cmi = (volatile unsigned int *)0x48004c10;
++	unsigned int t0 = *t;
++
++	while ((*t - t0) < 16384)
++		;
++	*cmf |= 0x20;			/* EN_WDT2 fclk + iclk */
++	*cmi |= 0x20;
++	NEST_WD[0x48 / 4] = 0xaaaa;	/* disable */
++	nest_wd_wait(0x10);
++	NEST_WD[0x48 / 4] = 0x5555;
++	nest_wd_wait(0x10);
++	NEST_WD[0x2c / 4] = 0xfff60000;	/* WLDR: 0xa0000 ticks = 20 s */
++	nest_wd_wait(0x04);
++	NEST_WD[0x30 / 4] = NEST_WD[0x30 / 4] + 1; /* WTGR: reload */
++	nest_wd_wait(0x08);
++	NEST_WD[0x48 / 4] = 0xbbbb;	/* enable */
++	nest_wd_wait(0x10);
++	NEST_WD[0x48 / 4] = 0x4444;
++	nest_wd_wait(0x10);
++}
++
+ int initcall_run_list(const init_fnc_t init_sequence[])
+ {
+ 	ulong reloc_ofs = calc_reloc_ofs();
+@@ -56,6 +94,7 @@
+ 	int ret = 0;
+ 
+ 	for (ptr = init_sequence; func = *ptr, func; ptr++) {
++		nest_ping();
+ 		type = initcall_is_event(func);
+ 
+ 		if (type) {

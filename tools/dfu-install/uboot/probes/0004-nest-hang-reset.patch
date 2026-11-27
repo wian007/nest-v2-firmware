@@ -1,0 +1,16 @@
+--- a/lib/hang.c	2026-11-21 23:27:37.575227308 +0100
++++ b/lib/hang.c	2026-11-21 23:27:37.586273408 +0100
+@@ -30,6 +30,13 @@
+ 	bootstage_error(BOOTSTAGE_ID_NEED_RESET);
+ 	if (IS_ENABLED(CONFIG_SANDBOX))
+ 		os_exit(1);
++	/* NEST PROBE: turn the hang into a warm reset so the time since the
++	 * push (pings) tells where init stopped */
++	{
++		extern void reset_cpu(void);
++
++		reset_cpu();
++	}
+ 	for (;;)
+ 		;
+ }

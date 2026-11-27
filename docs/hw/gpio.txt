@@ -1,0 +1,28 @@
+GPIOs 0-31, gpio:
+
+GPIOs 32-63, gpio:
+ gpio-42  (DIAMOND_GPIO_INTUSB_) out hi
+ gpio-58  (DIAMOND_GPIO_PIEZO_N) out hi
+ gpio-61  (ZigBee Reset#       ) out hi
+
+GPIOs 64-95, gpio:
+ gpio-65  (Backplate Detect    ) in  hi irq-225 edge-both
+
+GPIOs 96-127, gpio:
+ gpio-101 (ADBS A330 Shutdown  ) out lo
+ gpio-102 (WL127x IRQ          ) in  lo irq-262 level-high wakeup
+ gpio-103 (vmmc2               ) out hi
+ gpio-104 (Backplate Reset     ) out lo
+ gpio-105 (s6d05a1 lcd_id      ) in  hi
+ gpio-108 (ADBS A330 Motion#   ) in  hi irq-268 edge-falling wakeup
+ gpio-109 (s6d05a1 reset       ) out hi
+ gpio-110 (ADBS A330 Reset#    ) out hi
+
+GPIOs 128-159, gpio:
+
+GPIOs 160-191, gpio:
+ gpio-161 (Battery Disconnect  ) out lo
+ gpio-177 (lm3530 enable       ) out hi
+ gpio-182 (ZigBee Interrupt    ) in  hi irq-342 edge-falling
+
+GPIOs 192-209, platform/twl4030_gpio, twl4030, can sleep:

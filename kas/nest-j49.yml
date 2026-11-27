@@ -1,0 +1,61 @@
+header:
+  version: 14
+
+distro: poky
+machine: nest-j49
+
+# Yocto 5.5 "blacksail" (Oct 2026). The poky combo repo is no longer branched
+# after walnascar, so bitbake / openembedded-core / meta-yocto are pulled
+# separately (bitbake 2.20 pairs with blacksail: BB_MIN_VERSION 2.19.1).
+repos:
+  # This repo (meta-j49 lives here); null url = the repo kas is run from.
+  meta-j49:
+    layers:
+      meta-j49:
+
+  bitbake:
+    url: https://git.openembedded.org/bitbake
+    branch: "2.20"
+    layers:
+      .: disabled
+
+  openembedded-core:
+    url: https://git.openembedded.org/openembedded-core
+    branch: blacksail
+    layers:
+      meta:
+
+  meta-yocto:
+    url: https://git.yoctoproject.org/meta-yocto
+    branch: blacksail
+    layers:
+      meta-poky:
+
+  meta-openembedded:
+    url: https://git.openembedded.org/meta-openembedded
+    branch: blacksail
+    layers:
+      meta-oe:
+      meta-python:
+      meta-networking:
+
+local_conf_header:
+  base: |
+    CONF_VERSION = "2"
+    # Fully modern: systemd init, as requested.
+    INIT_MANAGER = "systemd"
+
+  nest: |
+    DISTRO_FEATURES:append = " systemd wifi"
+    # Headless 64 MB device: no graphics stacks (x11 made dbus pull libX11 + xauth), no
+    # audio, no bluetooth/3g/nfc, no nfs/zeroconf, no ptest/debuginfod payloads.
+    DISTRO_FEATURES:remove = "x11 wayland vulkan opengl pulseaudio alsa bluetooth 3g nfc nfs pcmcia pci zeroconf ptest debuginfod gobject-introspection-data"
+    # Host has 32 cores / 125 GB; leave headroom for the rest of the machine.
+    BB_NUMBER_THREADS = "24"
+    PARALLEL_MAKE = "-j 24"
+    # Keep the build dir lean.
+    INHERIT += "rm_work"
+    RM_WORK_EXCLUDE += "linux-j49 j49-image"
+
+target:
+  - j49-image

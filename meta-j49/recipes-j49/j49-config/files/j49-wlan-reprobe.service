@@ -1,0 +1,19 @@
+[Unit]
+Description=Provision device-unique files and re-probe the WL1271 once the root filesystem is available
+# wl12xx is built into the kernel and probes at ~1.6 s, before / is mounted, so its
+# request for ti-connectivity/wl127x-nvs.bin fails and the firmware never boots
+# (MAC 00:00:00:00:00:01, "wlcore: ERROR NVS file is needed during boot").
+# The script rebinds the device and waits for wlan0 to come back with a real MAC.
+DefaultDependencies=no
+After=local-fs.target systemd-udevd.service systemd-remount-fs.service
+Before=network-pre.target systemd-networkd.service wpa_supplicant@wlan0.service
+Wants=network-pre.target
+ConditionPathExists=/sys/bus/platform/drivers/wl12xx_driver
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/j49-wlan-reprobe
+
+[Install]
+WantedBy=network-pre.target multi-user.target

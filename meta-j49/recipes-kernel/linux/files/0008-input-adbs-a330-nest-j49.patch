@@ -1,0 +1,360 @@
+input: adbs-a330: add the Avago ADBS-A330 optical ring sensor driver
+
+The Nest Learning Thermostat 2nd gen (J49) rotary "ring" is an Avago ADBS-A330
+optical finger-navigation sensor on I2C2 at 0x57; there is no upstream driver.
+This is a device-tree i2c_driver that reproduces the register protocol recovered
+(read-only) from the stock 2.6.37 "avago-adbs-a330" driver: verify Product_ID
+0x88 at reg 0x00, run the config sequence (0x60=0xe4, 0x61=0xc9, 0x6c=0,
+0x1d=0x0e, 0x62|=0x10, 0x60=0x84, 0x63=(&0xfc)|2), and on each MOTION# edge-
+falling interrupt drain the Delta_X (0x03) / Delta_Y (0x04) registers and report
+REL_X / REL_Y. RESET# and SHUTDOWN are optional gpiods.
+
+Upstream-Status: Pending
+Signed-off-by: J49 project <j49@users.noreply.github.com>
+
+--- a/drivers/input/misc/Kconfig
++++ b/drivers/input/misc/Kconfig
+@@ -939,4 +939,16 @@
+ 	  To compile this driver as a module, choose M here: the
+ 	  module will be called stpmic1_onkey.
+ 
++config INPUT_ADBS_A330
++	tristate "Avago ADBS-A330 optical finger-navigation sensor"
++	depends on I2C
++	help
++	  Say Y here if you want to use the Avago ADBS-A330 optical
++	  finger-navigation sensor connected over I2C. It reports relative
++	  motion (REL_X / REL_Y) on its MOTION# interrupt. Used as the
++	  rotary "ring" of the Nest Learning Thermostat 2nd gen (J49).
++
++	  To compile this driver as a module, choose M here: the
++	  module will be called adbs-a330.
++
+ endif
+--- a/drivers/input/misc/Makefile
++++ b/drivers/input/misc/Makefile
+@@ -90,3 +90,4 @@
+ obj-$(CONFIG_INPUT_XEN_KBDDEV_FRONTEND)	+= xen-kbdfront.o
+ obj-$(CONFIG_INPUT_YEALINK)		+= yealink.o
+ obj-$(CONFIG_INPUT_IDEAPAD_SLIDEBAR)	+= ideapad_slidebar.o
++obj-$(CONFIG_INPUT_ADBS_A330)		+= adbs-a330.o
+--- a/drivers/input/misc/adbs-a330.c
++++ b/drivers/input/misc/adbs-a330.c
+@@ -0,0 +1,317 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Avago ADBS-A330 optical finger-navigation sensor (I2C) input driver.
++ *
++ * Written for the Nest Learning Thermostat 2nd gen (J49, OMAP3630), whose
++ * rotary "ring" is an Avago ADBS-A330 optical finger-navigation chip on I2C2
++ * at address 0x57. There is no upstream driver; the register logic below was
++ * recovered (read-only) from the stock 2.6.37 "avago-adbs-a330" driver in the
++ * device's own kernel image (see the port notes at the end of this file).
++ *
++ * The sensor signals movement by pulling its MOTION# line low (an edge-falling
++ * interrupt). On each interrupt the driver drains the Delta_X / Delta_Y
++ * registers until both read zero, accumulates the signed deltas and reports
++ * them as REL_X / REL_Y. On the J49 the ring maps to the Delta_Y axis
++ * (clockwise = negative on that unit); userspace picks the axis it wants.
++ */
++
++#include <linux/delay.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/input.h>
++#include <linux/interrupt.h>
++#include <linux/mod_devicetable.h>
++#include <linux/module.h>
++#include <linux/pm.h>
++#include <linux/property.h>
++
++/* Register map (recovered from the stock driver; see notes at EOF). */
++#define ADBS_A330_REG_PRODUCT_ID	0x00	/* reads 0x88 (0x83 on a variant) */
++#define ADBS_A330_REG_REVISION_ID	0x01	/* valid 0x00..0x01 */
++#define ADBS_A330_REG_MOTION		0x02	/* bit7 = motion pending */
++#define ADBS_A330_REG_DELTA_X		0x03	/* signed s8 */
++#define ADBS_A330_REG_DELTA_Y		0x04	/* signed s8 */
++#define ADBS_A330_REG_INV_PRODUCT_ID	0x3f	/* ~Product_ID (0x77) */
++
++/* Configuration registers written by the stock init sequence. */
++#define ADBS_A330_REG_CFG_1D		0x1d
++#define ADBS_A330_REG_CFG_60		0x60
++#define ADBS_A330_REG_CFG_61		0x61
++#define ADBS_A330_REG_CFG_62		0x62
++#define ADBS_A330_REG_CFG_63		0x63
++#define ADBS_A330_REG_CFG_6C		0x6c
++
++#define ADBS_A330_PRODUCT_ID		0x88
++#define ADBS_A330_PRODUCT_ID_ALT	0x83
++
++/* Upper bound on the per-interrupt Delta drain loop (each iteration can move
++ * the accumulators by at most +/-127; 32 iterations is far more than a human
++ * finger produces between interrupts and bounds a stuck/noisy bus).
++ */
++#define ADBS_A330_DRAIN_MAX		32
++
++struct adbs_a330 {
++	struct i2c_client *client;
++	struct input_dev *input;
++	struct gpio_desc *reset;	/* RESET#, active-low */
++	struct gpio_desc *shutdown;	/* SHUTDOWN, active-high (asserted = off) */
++};
++
++static int adbs_a330_write(struct adbs_a330 *s, u8 reg, u8 val)
++{
++	int ret = i2c_smbus_write_byte_data(s->client, reg, val);
++
++	if (ret)
++		dev_err(&s->client->dev, "write reg 0x%02x failed: %d\n",
++			reg, ret);
++	return ret;
++}
++
++static int adbs_a330_read(struct adbs_a330 *s, u8 reg)
++{
++	int ret = i2c_smbus_read_byte_data(s->client, reg);
++
++	if (ret < 0)
++		dev_err(&s->client->dev, "read reg 0x%02x failed: %d\n",
++			reg, ret);
++	return ret;
++}
++
++/*
++ * Power/reset sequence. Stock holds SHUTDOWN low (running) and RESET# high
++ * (released) in normal operation, and pulses RESET# low at power-up. Both
++ * control lines are optional: on the J49 the sensor runs without them being
++ * driven, but a proper cold reset makes probe deterministic.
++ *
++ * Delays are not recoverable from the stock binary (they were opaque
++ * udelay/mdelay constants); the values below are conservative and derived from
++ * the ADBS-A330 family power-up behaviour. ASSUMPTION - tune if needed.
++ */
++static void adbs_a330_power_up(struct adbs_a330 *s)
++{
++	/* Leave shutdown de-asserted (running). */
++	if (s->shutdown) {
++		gpiod_set_value_cansleep(s->shutdown, 0);
++		usleep_range(1000, 2000);
++	}
++
++	if (s->reset) {
++		/* Assert RESET# (logical 1 -> physical low on active-low line). */
++		gpiod_set_value_cansleep(s->reset, 1);
++		usleep_range(1000, 2000);
++		/* Release reset and wait for the sensor to boot. */
++		gpiod_set_value_cansleep(s->reset, 0);
++		usleep_range(50000, 60000);
++	}
++}
++
++/*
++ * Chip configuration, replicated register-for-register from the stock driver's
++ * Product_ID == 0x88 init path:
++ *   write 0x60 = 0xe4
++ *   write 0x61 = 0xc9
++ *   write 0x6c = 0x00        (product-variant flag: 0 for 0x88, 1 for 0x83)
++ *   write 0x1d = 0x0e
++ *   read  0x62; write 0x62 = (v & 0x0f) | 0x10
++ *   write 0x60 = 0x84
++ *   read  0x63; write 0x63 = (v & 0xfc) | 0x02
++ */
++static int adbs_a330_configure(struct adbs_a330 *s, u8 variant_flag)
++{
++	int v, ret;
++
++	ret = adbs_a330_write(s, ADBS_A330_REG_CFG_60, 0xe4);
++	if (ret)
++		return ret;
++	ret = adbs_a330_write(s, ADBS_A330_REG_CFG_61, 0xc9);
++	if (ret)
++		return ret;
++	ret = adbs_a330_write(s, ADBS_A330_REG_CFG_6C, variant_flag);
++	if (ret)
++		return ret;
++	ret = adbs_a330_write(s, ADBS_A330_REG_CFG_1D, 0x0e);
++	if (ret)
++		return ret;
++
++	v = adbs_a330_read(s, ADBS_A330_REG_CFG_62);
++	if (v < 0)
++		return v;
++	ret = adbs_a330_write(s, ADBS_A330_REG_CFG_62, (v & 0x0f) | 0x10);
++	if (ret)
++		return ret;
++
++	ret = adbs_a330_write(s, ADBS_A330_REG_CFG_60, 0x84);
++	if (ret)
++		return ret;
++
++	v = adbs_a330_read(s, ADBS_A330_REG_CFG_63);
++	if (v < 0)
++		return v;
++	return adbs_a330_write(s, ADBS_A330_REG_CFG_63, (v & 0xfc) | 0x02);
++}
++
++/*
++ * Threaded MOTION# handler. Stock did the same read in a workqueue because the
++ * 2.6.37 hardirq could not sleep; a 6.6 threaded IRQ lets us talk I2C directly.
++ * Drain Delta_X/Delta_Y until both read zero (reading them clears the motion),
++ * accumulate the signed deltas, then report.
++ */
++static irqreturn_t adbs_a330_irq(int irq, void *dev_id)
++{
++	struct adbs_a330 *s = dev_id;
++	int dx, dy, i;
++	s32 sx = 0, sy = 0;
++
++	for (i = 0; i < ADBS_A330_DRAIN_MAX; i++) {
++		dx = adbs_a330_read(s, ADBS_A330_REG_DELTA_X);
++		if (dx < 0)
++			break;
++		dy = adbs_a330_read(s, ADBS_A330_REG_DELTA_Y);
++		if (dy < 0)
++			break;
++
++		sx += (s8)dx;
++		sy += (s8)dy;
++
++		/* No more motion once both deltas are zero. */
++		if (((u8)dx | (u8)dy) == 0)
++			break;
++	}
++
++	if (sx)
++		input_report_rel(s->input, REL_X, sx);
++	if (sy)
++		input_report_rel(s->input, REL_Y, sy);
++	input_sync(s->input);
++
++	return IRQ_HANDLED;
++}
++
++static int adbs_a330_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct adbs_a330 *s;
++	u8 variant_flag;
++	int id, rev, ret;
++
++	if (!i2c_check_functionality(client->adapter, I2C_FUNC_SMBUS_BYTE_DATA))
++		return -EIO;
++
++	s = devm_kzalloc(dev, sizeof(*s), GFP_KERNEL);
++	if (!s)
++		return -ENOMEM;
++	s->client = client;
++	i2c_set_clientdata(client, s);
++
++	/* RESET# is active-low; start it asserted (chip held in reset). */
++	s->reset = devm_gpiod_get_optional(dev, "reset", GPIOD_OUT_HIGH);
++	if (IS_ERR(s->reset))
++		return dev_err_probe(dev, PTR_ERR(s->reset), "reset gpio\n");
++
++	/* SHUTDOWN is active-high; start it de-asserted (chip running). */
++	s->shutdown = devm_gpiod_get_optional(dev, "shutdown", GPIOD_OUT_LOW);
++	if (IS_ERR(s->shutdown))
++		return dev_err_probe(dev, PTR_ERR(s->shutdown), "shutdown gpio\n");
++
++	adbs_a330_power_up(s);
++
++	id = adbs_a330_read(s, ADBS_A330_REG_PRODUCT_ID);
++	if (id < 0)
++		return dev_err_probe(dev, id, "cannot read Product_ID\n");
++	if (id != ADBS_A330_PRODUCT_ID && id != ADBS_A330_PRODUCT_ID_ALT)
++		return dev_err_probe(dev, -ENODEV,
++				     "bad Product_ID 0x%02x (want 0x%02x)\n",
++				     id, ADBS_A330_PRODUCT_ID);
++	variant_flag = (id == ADBS_A330_PRODUCT_ID) ? 0 : 1;
++
++	rev = adbs_a330_read(s, ADBS_A330_REG_REVISION_ID);
++	if (rev < 0)
++		return dev_err_probe(dev, rev, "cannot read Revision_ID\n");
++	dev_info(dev, "ADBS-A330 Product_ID 0x%02x Revision_ID 0x%02x\n",
++		 id, rev);
++
++	ret = adbs_a330_configure(s, variant_flag);
++	if (ret)
++		return dev_err_probe(dev, ret, "configuration failed\n");
++
++	s->input = devm_input_allocate_device(dev);
++	if (!s->input)
++		return -ENOMEM;
++
++	s->input->name = "Avago ADBS-A330";
++	s->input->phys = "adbs-a330/input0";
++	s->input->id.bustype = BUS_I2C;
++	s->input->dev.parent = dev;
++
++	input_set_capability(s->input, EV_REL, REL_X);
++	input_set_capability(s->input, EV_REL, REL_Y);
++
++	ret = input_register_device(s->input);
++	if (ret)
++		return dev_err_probe(dev, ret, "cannot register input device\n");
++
++	if (!client->irq)
++		return dev_err_probe(dev, -EINVAL, "no MOTION# interrupt\n");
++
++	ret = devm_request_threaded_irq(dev, client->irq, NULL, adbs_a330_irq,
++					IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
++					"adbs-a330", s);
++	if (ret)
++		return dev_err_probe(dev, ret, "cannot request IRQ %d\n",
++				     client->irq);
++
++	if (device_property_read_bool(dev, "wakeup-source"))
++		device_init_wakeup(dev, true);
++
++	return 0;
++}
++
++static int adbs_a330_suspend(struct device *dev)
++{
++	struct adbs_a330 *s = dev_get_drvdata(dev);
++
++	if (device_may_wakeup(dev))
++		enable_irq_wake(s->client->irq);
++
++	return 0;
++}
++
++static int adbs_a330_resume(struct device *dev)
++{
++	struct adbs_a330 *s = dev_get_drvdata(dev);
++
++	if (device_may_wakeup(dev))
++		disable_irq_wake(s->client->irq);
++
++	return 0;
++}
++
++static DEFINE_SIMPLE_DEV_PM_OPS(adbs_a330_pm_ops,
++				adbs_a330_suspend, adbs_a330_resume);
++
++static const struct of_device_id adbs_a330_of_match[] = {
++	{ .compatible = "avago,adbs-a330" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, adbs_a330_of_match);
++
++static const struct i2c_device_id adbs_a330_id[] = {
++	{ "adbs-a330" },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, adbs_a330_id);
++
++static struct i2c_driver adbs_a330_driver = {
++	.driver = {
++		.name		= "adbs-a330",
++		.of_match_table	= adbs_a330_of_match,
++		.pm		= pm_sleep_ptr(&adbs_a330_pm_ops),
++	},
++	.probe		= adbs_a330_probe,
++	.id_table	= adbs_a330_id,
++};
++module_i2c_driver(adbs_a330_driver);
++
++MODULE_DESCRIPTION("Avago ADBS-A330 optical finger-navigation input driver");
++MODULE_AUTHOR("J49 project <j49@users.noreply.github.com>");
++MODULE_LICENSE("GPL");

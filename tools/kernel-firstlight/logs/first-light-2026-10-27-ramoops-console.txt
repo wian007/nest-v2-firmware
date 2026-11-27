@@ -1,0 +1,446 @@
+[    0.000000] Booting Linux on physical CPU 0x0
+[    0.000000] Linux version 6.6.64 (builder@host) (armv7l-unknown-linux-gnueabihf-gcc (GCC) 15.3.0, GNU ld (GNU Binutils) 2.46) #4 SMP Tue Oct 27 20:47:12 CET 2026
+[    0.000000] CPU: ARMv7 Processor [413fc082] revision 2 (ARMv7), cr=10c5387d
+[    0.000000] CPU: PIPT / VIPT nonaliasing data cache, VIPT aliasing instruction cache
+[    0.000000] OF: fdt: Machine model: Nest Learning Thermostat 2nd Gen (J49)
+[    0.000000] printk: bootconsole [earlycon0] enabled
+[    0.000000] printk: debug: skip boot console de-registration.
+[    0.000000] printk: debug: ignoring loglevel setting.
+[    0.000000] Memory policy: Data cache writeback
+[    0.000000] OF: reserved mem: 0x83e00000..0x83e3ffff (256 KiB) map non-reusable ramoops@83e00000
+[    0.000000] OF: reserved mem: 0x83e80000..0x83e8ffff (64 KiB) map non-reusable ramring@83e80000
+[    0.000000] cma: Reserved 16 MiB at 0x82800000 on node -1
+[    0.000000] Zone ranges:
+[    0.000000]   Normal   [mem 0x0000000080000000-0x0000000083dfffff]
+[    0.000000]   HighMem  empty
+[    0.000000] Movable zone start for each node
+[    0.000000] Early memory node ranges
+[    0.000000]   node   0: [mem 0x0000000080000000-0x0000000083dfffff]
+[    0.000000] Initmem setup node 0 [mem 0x0000000080000000-0x0000000083dfffff]
+[    0.000000] CPU: All CPU(s) started in SVC mode.
+[    0.000000] AM3703 ES1.2 (l2cache neon isp 192mhz_clk)
+[    0.000000] percpu: Embedded 16 pages/cpu s36052 r8192 d21292 u65536
+[    0.000000] pcpu-alloc: s36052 r8192 d21292 u65536 alloc=16*4096
+[    0.000000] pcpu-alloc: [0] 0 
+[    0.000000] Kernel command line: mem=64M earlyprintk keep_bootcon panic=15 loglevel=8 ignore_loglevel rdinit=/init
+[    0.000000] Dentry cache hash table entries: 8192 (order: 3, 32768 bytes, linear)
+[    0.000000] Inode-cache hash table entries: 4096 (order: 2, 16384 bytes, linear)
+[    0.000000] Built 1 zonelists, mobility grouping on.  Total pages: 15732
+[    0.000000] mem auto-init: stack:all(zero), heap alloc:off, heap free:off
+[    0.000000] Memory: 28412K/63488K available (11264K kernel code, 1128K rwdata, 2648K rodata, 1024K init, 285K bss, 18692K reserved, 16384K cma-reserved, 0K highmem)
+[    0.000000] SLUB: HWalign=64, Order=0-3, MinObjects=0, CPUs=1, Nodes=1
+[    0.000000] trace event string verifier disabled
+[    0.000000] rcu: Hierarchical RCU implementation.
+[    0.000000] rcu: 	RCU event tracing is enabled.
+[    0.000000] rcu: 	RCU restricting CPUs from NR_CPUS=2 to nr_cpu_ids=1.
+[    0.000000] rcu: RCU calculated value of scheduler-enlistment delay is 10 jiffies.
+[    0.000000] rcu: Adjusting geometry for rcu_fanout_leaf=16, nr_cpu_ids=1
+[    0.000000] NR_IRQS: 16, nr_irqs: 16, preallocated irqs: 16
+[    0.000000] IRQ: Found an INTC at 0x(ptrval) (revision 4.0) with 96 interrupts
+[    0.000000] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[    0.000000] Clocking rate (Crystal/Core/MPU): 19.2/332/300 MHz
+[    0.000000] OMAP clocksource: 32k_counter at 32768 Hz
+[    0.000000] clocksource: 32k_counter: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 58327039986419 ns
+[    0.000000] sched_clock: 32 bits at 33kHz, resolution 30517ns, wraps every 65535999984741ns
+[    0.005859] TI gptimer clockevent: always-on 32768 Hz at /ocp@68000000/target-module@48318000
+[    0.008453] Console: colour dummy device 80x30
+[    0.008605] printk: console [tty0] enabled
+[    0.008819] Calibrating delay loop... 299.82 BogoMIPS (lpj=1499136)
+[    0.076690] CPU: Testing write buffer coherency: ok
+[    0.076965] CPU0: Spectre v2: using BPIALL workaround
+[    0.077087] pid_max: default: 32768 minimum: 301
+[    0.077453] LSM: initializing lsm=capability
+[    0.077941] Mount-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.078124] Mountpoint-cache hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.081512] CPU0: thread -1, cpu 0, socket -1, mpidr 0
+[    0.085876] Setting up static identity map for 0x80100000 - 0x80100078
+[    0.086975] rcu: Hierarchical SRCU implementation.
+[    0.087097] rcu: 	Max phase no-delay instances is 1000.
+[    0.089141] smp: Bringing up secondary CPUs ...
+[    0.089355] smp: Brought up 1 node, 1 CPU
+[    0.089477] SMP: Total of 1 processors activated (299.82 BogoMIPS).
+[    0.089599] CPU: All CPU(s) started in SVC mode.
+[    0.091430] devtmpfs: initialized
+[    0.145660] VFP support v0.3: implementor 41 architecture 3 part 30 variant c rev 3
+[    0.146728] clocksource: jiffies: mask: 0xffffffff max_cycles: 0xffffffff, max_idle_ns: 19112604462750000 ns
+[    0.147277] futex hash table entries: 256 (order: 2, 16384 bytes, linear)
+[    0.150024] pinctrl core: initialized pinctrl subsystem
+[    0.156219] NET: Registered PF_NETLINK/PF_ROUTE protocol family
+[    0.163391] DMA: preallocated 256 KiB pool for atomic coherent allocations
+[    0.215576] omap_hwmod: mcbsp2_sidetone using broken dt data from mcbsp
+[    0.217437] omap_hwmod: mcbsp3_sidetone using broken dt data from mcbsp
+[    0.283691] audit: initializing netlink subsys (disabled)
+[    0.287109] thermal_sys: Registered thermal governor 'fair_share'
+[    0.287170] thermal_sys: Registered thermal governor 'step_wise'
+[    0.287506] thermal_sys: Registered thermal governor 'user_space'
+[    0.287872] audit: type=2000 audit(0.280:1): state=initialized audit_enabled=0 res=1
+[    0.288360] cpuidle: using governor menu
+[    0.289215] Reprogramming SDRC clock to 332000000 Hz
+[    0.352111] platform 68000000.ocp: Fixed dependency cycle(s) with /ocp@68000000/interrupt-controller@48200000
+[    0.377258] gpiochip_find_base: found new base at 512
+[    0.378692] gpio gpiochip0: (gpio-0-31): added GPIO chardev (254:0)
+[    0.379180] gpio gpiochip0: registered GPIOs 512 to 543 on gpio-0-31
+[    0.379425] OMAP GPIO hardware version 2.5
+[    0.381500] gpiochip_find_base: found new base at 544
+[    0.382690] gpio gpiochip1: (gpio-32-63): added GPIO chardev (254:1)
+[    0.383178] gpio gpiochip1: registered GPIOs 544 to 575 on gpio-32-63
+[    0.385192] gpiochip_find_base: found new base at 576
+[    0.386352] gpio gpiochip2: (gpio-64-95): added GPIO chardev (254:2)
+[    0.386810] gpio gpiochip2: registered GPIOs 576 to 607 on gpio-64-95
+[    0.389099] gpiochip_find_base: found new base at 608
+[    0.390350] gpio gpiochip3: (gpio-96-127): added GPIO chardev (254:3)
+[    0.390808] gpio gpiochip3: registered GPIOs 608 to 639 on gpio-96-127
+[    0.392913] gpiochip_find_base: found new base at 640
+[    0.394042] gpio gpiochip4: (gpio-128-159): added GPIO chardev (254:4)
+[    0.394500] gpio gpiochip4: registered GPIOs 640 to 671 on gpio-128-159
+[    0.396545] gpiochip_find_base: found new base at 672
+[    0.397674] gpio gpiochip5: (gpio-160-191): added GPIO chardev (254:5)
+[    0.398376] gpio gpiochip5: registered GPIOs 672 to 703 on gpio-160-191
+[    0.443176] No ATAGs?
+[    0.443359] hw-breakpoint: debug architecture 0x4 unsupported.
+[    0.451263] printk: console [ramoops-1] enabled
+[    0.453277] pstore: Registered ramoops as persistent store backend
+[    0.453460] ramoops: using 0x40000@0x83e00000, ecc: 0
+[    0.459838] kprobes: kprobe jump-optimization is enabled. All kprobes are optimized if possible.
+[    0.500213] iommu: Default domain type: Translated
+[    0.500427] iommu: DMA domain TLB invalidation policy: strict mode
+[    0.504730] platform 480bc000.isp: Adding to iommu group 0
+[    0.505065] omap-iommu 480bd400.mmu: 480bd400.mmu registered
+[    0.507598] SCSI subsystem initialized
+[    0.540069] libata version 3.00 loaded.
+[    0.541015] usbcore: registered new interface driver usbfs
+[    0.541290] usbcore: registered new interface driver hub
+[    0.541595] usbcore: registered new device driver usb
+[    0.549743] i2c i2c-0: using DT '/ocp@68000000/i2c@48070000' for 'scl' GPIO lookup
+[    0.550079] of_get_named_gpiod_flags: can't parse 'scl-gpios' property of node '/ocp@68000000/i2c@48070000[0]'
+[    0.550384] of_get_named_gpiod_flags: can't parse 'scl-gpio' property of node '/ocp@68000000/i2c@48070000[0]'
+[    0.550628] i2c i2c-0: using lookup tables for GPIO lookup
+[    0.550781] i2c i2c-0: No GPIO consumer scl found
+[    0.550933] i2c i2c-0: using DT '/ocp@68000000/i2c@48070000' for 'sda' GPIO lookup
+[    0.551177] of_get_named_gpiod_flags: can't parse 'sda-gpios' property of node '/ocp@68000000/i2c@48070000[0]'
+[    0.551452] of_get_named_gpiod_flags: can't parse 'sda-gpio' property of node '/ocp@68000000/i2c@48070000[0]'
+[    0.551727] i2c i2c-0: using lookup tables for GPIO lookup
+[    0.551879] i2c i2c-0: No GPIO consumer sda found
+[    0.553131] omap_i2c 48070000.i2c: bus 0 rev4.4 at 2600 kHz
+[    0.570922] i2c i2c-1: using DT '/ocp@68000000/i2c@48072000' for 'scl' GPIO lookup
+[    0.571258] of_get_named_gpiod_flags: can't parse 'scl-gpios' property of node '/ocp@68000000/i2c@48072000[0]'
+[    0.571533] of_get_named_gpiod_flags: can't parse 'scl-gpio' property of node '/ocp@68000000/i2c@48072000[0]'
+[    0.571807] i2c i2c-1: using lookup tables for GPIO lookup
+[    0.571960] i2c i2c-1: No GPIO consumer scl found
+[    0.572113] i2c i2c-1: using DT '/ocp@68000000/i2c@48072000' for 'sda' GPIO lookup
+[    0.572357] of_get_named_gpiod_flags: can't parse 'sda-gpios' property of node '/ocp@68000000/i2c@48072000[0]'
+[    0.572631] of_get_named_gpiod_flags: can't parse 'sda-gpio' property of node '/ocp@68000000/i2c@48072000[0]'
+[    0.572875] i2c i2c-1: using lookup tables for GPIO lookup
+[    0.573059] i2c i2c-1: No GPIO consumer sda found
+[    0.573272] omap_i2c 48072000.i2c: bus 1 rev4.4 at 100 kHz
+[    0.575469] i2c i2c-2: using DT '/ocp@68000000/i2c@48060000' for 'scl' GPIO lookup
+[    0.575775] of_get_named_gpiod_flags: can't parse 'scl-gpios' property of node '/ocp@68000000/i2c@48060000[0]'
+[    0.576080] of_get_named_gpiod_flags: can't parse 'scl-gpio' property of node '/ocp@68000000/i2c@48060000[0]'
+[    0.576324] i2c i2c-2: using lookup tables for GPIO lookup
+[    0.576507] i2c i2c-2: No GPIO consumer scl found
+[    0.576660] i2c i2c-2: using DT '/ocp@68000000/i2c@48060000' for 'sda' GPIO lookup
+[    0.576904] of_get_named_gpiod_flags: can't parse 'sda-gpios' property of node '/ocp@68000000/i2c@48060000[0]'
+[    0.577178] of_get_named_gpiod_flags: can't parse 'sda-gpio' property of node '/ocp@68000000/i2c@48060000[0]'
+[    0.577423] i2c i2c-2: using lookup tables for GPIO lookup
+[    0.577575] i2c i2c-2: No GPIO consumer sda found
+[    0.577789] omap_i2c 48060000.i2c: bus 2 rev4.4 at 100 kHz
+[    0.578948] pps_core: LinuxPPS API ver. 1 registered
+[    0.579162] pps_core: Software ver. 5.3.6 - Copyright 2005-2007 Rodolfo Giometti <giometti@linux.it>
+[    0.579437] PTP clock support registered
+[    0.600799] vgaarb: loaded
+[    0.601593] clocksource: Switched to clocksource 32k_counter
+[    0.603149] VFS: Disk quotas dquot_6.6.0
+[    0.603454] VFS: Dquot-cache hash table entries: 1024 (order 0, 4096 bytes)
+[    0.674316] NET: Registered PF_INET protocol family
+[    0.675262] IP idents hash table entries: 2048 (order: 2, 16384 bytes, linear)
+[    0.677642] tcp_listen_portaddr_hash hash table entries: 512 (order: 0, 4096 bytes, linear)
+[    0.677978] Table-perturb hash table entries: 65536 (order: 6, 262144 bytes, linear)
+[    0.678192] TCP established hash table entries: 1024 (order: 0, 4096 bytes, linear)
+[    0.678436] TCP bind hash table entries: 1024 (order: 2, 16384 bytes, linear)
+[    0.678710] TCP: Hash tables configured (established 1024 bind 1024)
+[    0.679107] UDP hash table entries: 256 (order: 1, 8192 bytes, linear)
+[    0.679351] UDP-Lite hash table entries: 256 (order: 1, 8192 bytes, linear)
+[    0.679962] NET: Registered PF_UNIX/PF_LOCAL protocol family
+[    0.703002] RPC: Registered named UNIX socket transport module.
+[    0.703247] RPC: Registered udp transport module.
+[    0.703399] RPC: Registered tcp transport module.
+[    0.703552] RPC: Registered tcp-with-tls transport module.
+[    0.703674] RPC: Registered tcp NFSv4.1 backchannel transport module.
+[    0.703887] PCI: CLS 0 bytes, default 64
+[    0.712554] Trying to unpack rootfs image as initramfs...
+[    0.744201] hw perfevents: enabled with armv7_cortex_a8 PMU driver, 5 counters available
+[    0.749389] Initialise system trusted keyrings
+[    0.773712] workingset: timestamp_bits=14 max_order=14 bucket_order=0
+[    0.776824] NFS: Registering the id_resolver key type
+[    0.777130] Key type id_resolver registered
+[    0.777282] Key type id_legacy registered
+[    0.777557] jffs2: version 2.2. (NAND) (SUMMARY)  © 2001-2006 Red Hat, Inc.
+[    0.778839] Key type asymmetric registered
+[    0.779022] Asymmetric key parser 'x509' registered
+[    0.779296] io scheduler mq-deadline registered
+[    0.779449] io scheduler kyber registered
+[    0.779724] io scheduler bfq registered
+[    0.818969] pinctrl-single 48002030.pinmux: 284 pins, size 568
+[    0.820404] pinctrl-single 48002a00.pinmux: 46 pins, size 92
+[    0.822601] pinctrl-single 480025a0.pinmux: 46 pins, size 92
+[    0.883728] Serial: 8250/16550 driver, 6 ports, IRQ sharing enabled
+[    0.942932] omap8250 4806a000.serial: using DT '/ocp@68000000/serial@4806a000' for 'rs485-term' GPIO lookup
+[    0.943359] of_get_named_gpiod_flags: can't parse 'rs485-term-gpios' property of node '/ocp@68000000/serial@4806a000[0]'
+[    0.943664] of_get_named_gpiod_flags: can't parse 'rs485-term-gpio' property of node '/ocp@68000000/serial@4806a000[0]'
+[    0.943939] omap8250 4806a000.serial: using lookup tables for GPIO lookup
+[    0.944122] omap8250 4806a000.serial: No GPIO consumer rs485-term found
+[    0.944274] omap8250 4806a000.serial: using DT '/ocp@68000000/serial@4806a000' for 'rs485-rx-during-tx' GPIO lookup
+[    0.944580] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpios' property of node '/ocp@68000000/serial@4806a000[0]'
+[    0.944854] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpio' property of node '/ocp@68000000/serial@4806a000[0]'
+[    0.945159] omap8250 4806a000.serial: using lookup tables for GPIO lookup
+[    0.945312] omap8250 4806a000.serial: No GPIO consumer rs485-rx-during-tx found
+[    0.946411] 4806a000.serial: ttyS0 at MMIO 0x4806a000 (irq = 88, base_baud = 3000000) is a 8250
+[    0.975036] omap8250 4806c000.serial: using DT '/ocp@68000000/serial@4806c000' for 'rs485-term' GPIO lookup
+[    0.975433] of_get_named_gpiod_flags: can't parse 'rs485-term-gpios' property of node '/ocp@68000000/serial@4806c000[0]'
+[    0.975738] of_get_named_gpiod_flags: can't parse 'rs485-term-gpio' property of node '/ocp@68000000/serial@4806c000[0]'
+[    0.976013] omap8250 4806c000.serial: using lookup tables for GPIO lookup
+[    0.976196] omap8250 4806c000.serial: No GPIO consumer rs485-term found
+[    0.976379] omap8250 4806c000.serial: using DT '/ocp@68000000/serial@4806c000' for 'rs485-rx-during-tx' GPIO lookup
+[    0.976654] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpios' property of node '/ocp@68000000/serial@4806c000[0]'
+[    0.976959] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpio' property of node '/ocp@68000000/serial@4806c000[0]'
+[    0.977233] omap8250 4806c000.serial: using lookup tables for GPIO lookup
+[    0.977416] omap8250 4806c000.serial: No GPIO consumer rs485-rx-during-tx found
+[    0.978393] 4806c000.serial: ttyS1 at MMIO 0x4806c000 (irq = 89, base_baud = 3000000) is a 8250
+[    1.027130] omap8250 49020000.serial: using DT '/ocp@68000000/serial@49020000' for 'rs485-term' GPIO lookup
+[    1.027557] of_get_named_gpiod_flags: can't parse 'rs485-term-gpios' property of node '/ocp@68000000/serial@49020000[0]'
+[    1.027862] of_get_named_gpiod_flags: can't parse 'rs485-term-gpio' property of node '/ocp@68000000/serial@49020000[0]'
+[    1.028137] omap8250 49020000.serial: using lookup tables for GPIO lookup
+[    1.028320] omap8250 49020000.serial: No GPIO consumer rs485-term found
+[    1.028503] omap8250 49020000.serial: using DT '/ocp@68000000/serial@49020000' for 'rs485-rx-during-tx' GPIO lookup
+[    1.028778] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpios' property of node '/ocp@68000000/serial@49020000[0]'
+[    1.029083] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpio' property of node '/ocp@68000000/serial@49020000[0]'
+[    1.029357] omap8250 49020000.serial: using lookup tables for GPIO lookup
+[    1.029541] omap8250 49020000.serial: No GPIO consumer rs485-rx-during-tx found
+[    1.030609] 49020000.serial: ttyS2 at MMIO 0x49020000 (irq = 90, base_baud = 3000000) is a 8250
+[    1.047912] omap8250 49042000.serial: using DT '/ocp@68000000/serial@49042000' for 'rs485-term' GPIO lookup
+[    1.048339] of_get_named_gpiod_flags: can't parse 'rs485-term-gpios' property of node '/ocp@68000000/serial@49042000[0]'
+[    1.048645] of_get_named_gpiod_flags: can't parse 'rs485-term-gpio' property of node '/ocp@68000000/serial@49042000[0]'
+[    1.048919] omap8250 49042000.serial: using lookup tables for GPIO lookup
+[    1.049102] omap8250 49042000.serial: No GPIO consumer rs485-term found
+[    1.049255] omap8250 49042000.serial: using DT '/ocp@68000000/serial@49042000' for 'rs485-rx-during-tx' GPIO lookup
+[    1.049530] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpios' property of node '/ocp@68000000/serial@49042000[0]'
+[    1.049835] of_get_named_gpiod_flags: can't parse 'rs485-rx-during-tx-gpio' property of node '/ocp@68000000/serial@49042000[0]'
+[    1.050109] omap8250 49042000.serial: using lookup tables for GPIO lookup
+[    1.050292] omap8250 49042000.serial: No GPIO consumer rs485-rx-during-tx found
+[    1.051300] 49042000.serial: ttyS3 at MMIO 0x49042000 (irq = 96, base_baud = 3000000) is a 8250
+[    1.156097] Freeing initrd memory: 876K
+[    1.207672] brd: module loaded
+[    1.241149] loop: module loaded
+[    1.245056] Skipping twl internal clock init and using bootloader value (unknown osc rate)
+[    1.290863] twl 0-0048: PIH (irq 23) chaining IRQs 144..152
+[    1.291412] twl 0-0048: power (irq 149) chaining IRQs 152..159
+[    1.315277] twl4030_gpio twl4030-gpio: gpio (irq 144) chaining IRQs 160..177
+[    1.353881] gpiochip_find_base: found new base at 704
+[    1.381469] gpio gpiochip6: (twl4030): added GPIO chardev (254:6)
+[    1.382293] gpio gpiochip6: registered GPIOs 704 to 721 on twl4030
+[    1.532470] twl4030_usb 48070000.i2c:twl@48:twl4030-usb: Initialized TWL4030 USB module
+[    1.542755] mtdoops: mtd device (mtddev=name/number) must be supplied
+[    1.550842] mdio_bus fixed-0: using lookup tables for GPIO lookup
+[    1.551086] mdio_bus fixed-0: No GPIO consumer reset found
+[    1.558837] userial_init: registered 8 ttyGS* devices
+[    1.559173] UDC core: g_serial: couldn't find an available UDC
+[    1.559356] i2c_dev: i2c /dev entries driver
+[    1.601226] ti-soc-thermal 48002524.bandgap: This OMAP thermal sensor is unreliable. You've been warned
+[    1.601562] ti-soc-thermal 48002524.bandgap: Non-trimmed BGAP, Temp not accurate
+[    1.611328] sdhci: Secure Digital Host Controller Interface driver
+[    1.611572] sdhci: Copyright(c) Pierre Ossman
+[    1.613739] sdhci-pltfm: SDHCI platform and OF driver helper
+[    1.616241] omap_hsmmc 4809c000.mmc: using DT '/ocp@68000000/mmc@4809c000' for 'cd' GPIO lookup
+[    1.616607] of_get_named_gpiod_flags: can't parse 'cd-gpios' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    1.616882] of_get_named_gpiod_flags: can't parse 'cd-gpio' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    1.617156] omap_hsmmc 4809c000.mmc: using lookup tables for GPIO lookup
+[    1.617309] omap_hsmmc 4809c000.mmc: No GPIO consumer cd found
+[    1.617492] omap_hsmmc 4809c000.mmc: using DT '/ocp@68000000/mmc@4809c000' for 'wp' GPIO lookup
+[    1.617736] of_get_named_gpiod_flags: can't parse 'wp-gpios' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    1.618011] of_get_named_gpiod_flags: can't parse 'wp-gpio' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    1.618286] omap_hsmmc 4809c000.mmc: using lookup tables for GPIO lookup
+[    1.618438] omap_hsmmc 4809c000.mmc: No GPIO consumer wp found
+[    1.619781] omap_hsmmc 4809c000.mmc: RX DMA channel request failed
+[    1.620269] ledtrig-cpu: registered to indicate activity on CPUs
+[    1.629425] omap-gpmc 6e000000.gpmc: GPMC revision 5.0
+[    1.629669] gpmc_mem_init: disabling cs 0 mapped at 0x0-0x1000000
+[    1.629913] gpiochip_find_base: found new base at 722
+[    1.632324] omap_hsmmc 480b4000.mmc: using DT '/ocp@68000000/mmc@480b4000' for 'cd' GPIO lookup
+[    1.632659] of_get_named_gpiod_flags: can't parse 'cd-gpios' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    1.632965] of_get_named_gpiod_flags: can't parse 'cd-gpio' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    1.633209] omap_hsmmc 480b4000.mmc: using lookup tables for GPIO lookup
+[    1.633392] omap_hsmmc 480b4000.mmc: No GPIO consumer cd found
+[    1.633575] omap_hsmmc 480b4000.mmc: using DT '/ocp@68000000/mmc@480b4000' for 'wp' GPIO lookup
+[    1.633819] of_get_named_gpiod_flags: can't parse 'wp-gpios' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    1.634094] of_get_named_gpiod_flags: can't parse 'wp-gpio' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    1.634338] omap_hsmmc 480b4000.mmc: using lookup tables for GPIO lookup
+[    1.634521] omap_hsmmc 480b4000.mmc: No GPIO consumer wp found
+[    1.635650] omap_hsmmc 480b4000.mmc: RX DMA channel request failed
+[    1.637786] omap_hsmmc 480ad000.mmc: using DT '/ocp@68000000/mmc@480ad000' for 'cd' GPIO lookup
+[    1.638092] of_get_named_gpiod_flags: can't parse 'cd-gpios' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    1.638397] of_get_named_gpiod_flags: can't parse 'cd-gpio' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    1.638641] omap_hsmmc 480ad000.mmc: using lookup tables for GPIO lookup
+[    1.638824] omap_hsmmc 480ad000.mmc: No GPIO consumer cd found
+[    1.638977] omap_hsmmc 480ad000.mmc: using DT '/ocp@68000000/mmc@480ad000' for 'wp' GPIO lookup
+[    1.639251] of_get_named_gpiod_flags: can't parse 'wp-gpios' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    1.639526] of_get_named_gpiod_flags: can't parse 'wp-gpio' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    1.639770] omap_hsmmc 480ad000.mmc: using lookup tables for GPIO lookup
+[    1.639923] omap_hsmmc 480ad000.mmc: No GPIO consumer wp found
+[    1.640930] omap_hsmmc 480ad000.mmc: RX DMA channel request failed
+[    1.680389] gpio gpiochip7: (omap-gpmc): added GPIO chardev (254:7)
+[    1.680969] gpio gpiochip7: registered GPIOs 722 to 725 on omap-gpmc
+[    1.683288] Initializing XFRM netlink socket
+[    1.683807] NET: Registered PF_INET6 protocol family
+[    1.688018] Segment Routing with IPv6
+[    1.688415] In-situ OAM (IOAM) with IPv6
+[    1.688781] sit: IPv6, IPv4 and MPLS over IPv4 tunneling driver
+[    1.691223] NET: Registered PF_PACKET protocol family
+[    1.691467] NET: Registered PF_KEY protocol family
+[    1.692199] Key type dns_resolver registered
+[    1.692840] ThumbEE CPU extension supported.
+[    1.693054] Registering SWP/SWPB emulation handler
+[    1.697052] SmartReflex Class3 initialized
+[    1.752777] Loading compiled-in X.509 certificates
+[    1.855651] smartreflex 480c9000.smartreflex: omap_sr_probe: SmartReflex driver initialized
+[    1.905548] omap-dma-engine 48056000.dma-controller: OMAP DMA engine driver (LinkedList1/2/3 supported)
+[    1.910369] ti-sysc: probe of 48318000.target-module failed with error -16
+[    1.924316] udc musb-hdrc.0.auto: binding gadget driver [g_serial]
+[    1.973144] g_serial gadget.0: adding 'acm'/(ptrval) to config 'CDC ACM config'/(ptrval)
+[    1.973541] g_serial gadget.0: acm ttyGS0: IN/ep1in OUT/ep1out NOTIFY/ep2in
+[    1.973785] g_serial gadget.0: Gadget Serial v2.4
+[    1.973937] g_serial gadget.0: g_serial ready
+[    1.978576] smartreflex 480cb000.smartreflex: omap_sr_probe: SmartReflex driver initialized
+[    2.042510] omap_hsmmc 4809c000.mmc: using DT '/ocp@68000000/mmc@4809c000' for 'cd' GPIO lookup
+[    2.042877] of_get_named_gpiod_flags: can't parse 'cd-gpios' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    2.043182] of_get_named_gpiod_flags: can't parse 'cd-gpio' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    2.043426] omap_hsmmc 4809c000.mmc: using lookup tables for GPIO lookup
+[    2.043609] omap_hsmmc 4809c000.mmc: No GPIO consumer cd found
+[    2.043792] omap_hsmmc 4809c000.mmc: using DT '/ocp@68000000/mmc@4809c000' for 'wp' GPIO lookup
+[    2.044036] of_get_named_gpiod_flags: can't parse 'wp-gpios' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    2.044311] of_get_named_gpiod_flags: can't parse 'wp-gpio' property of node '/ocp@68000000/mmc@4809c000[0]'
+[    2.044586] omap_hsmmc 4809c000.mmc: using lookup tables for GPIO lookup
+[    2.044738] omap_hsmmc 4809c000.mmc: No GPIO consumer wp found
+[    2.049743] omap_hsmmc 480b4000.mmc: using DT '/ocp@68000000/mmc@480b4000' for 'cd' GPIO lookup
+[    2.050109] of_get_named_gpiod_flags: can't parse 'cd-gpios' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    2.050415] of_get_named_gpiod_flags: can't parse 'cd-gpio' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    2.050659] omap_hsmmc 480b4000.mmc: using lookup tables for GPIO lookup
+[    2.050842] omap_hsmmc 480b4000.mmc: No GPIO consumer cd found
+[    2.051025] omap_hsmmc 480b4000.mmc: using DT '/ocp@68000000/mmc@480b4000' for 'wp' GPIO lookup
+[    2.051269] of_get_named_gpiod_flags: can't parse 'wp-gpios' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    2.051544] of_get_named_gpiod_flags: can't parse 'wp-gpio' property of node '/ocp@68000000/mmc@480b4000[0]'
+[    2.052093] omap_hsmmc 480b4000.mmc: using lookup tables for GPIO lookup
+[    2.052307] omap_hsmmc 480b4000.mmc: No GPIO consumer wp found
+[    2.055877] omap_hsmmc 480ad000.mmc: using DT '/ocp@68000000/mmc@480ad000' for 'cd' GPIO lookup
+[    2.056243] of_get_named_gpiod_flags: can't parse 'cd-gpios' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    2.056518] of_get_named_gpiod_flags: can't parse 'cd-gpio' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    2.056793] omap_hsmmc 480ad000.mmc: using lookup tables for GPIO lookup
+[    2.056945] omap_hsmmc 480ad000.mmc: No GPIO consumer cd found
+[    2.057128] omap_hsmmc 480ad000.mmc: using DT '/ocp@68000000/mmc@480ad000' for 'wp' GPIO lookup
+[    2.057373] of_get_named_gpiod_flags: can't parse 'wp-gpios' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    2.057647] of_get_named_gpiod_flags: can't parse 'wp-gpio' property of node '/ocp@68000000/mmc@480ad000[0]'
+[    2.057922] omap_hsmmc 480ad000.mmc: using lookup tables for GPIO lookup
+[    2.058074] omap_hsmmc 480ad000.mmc: No GPIO consumer wp found
+[    3.511108] clk: Disabling unused clocks
+[    3.517883] Freeing unused kernel image (initmem) memory: 1024K
+[    3.519927] Run /init as init process
+[    3.520080]   with arguments:
+[    3.520172]     /init
+[    3.520263]   with environment:
+[    3.520385]     HOME=/
+[    3.520477]     TERM=linux
+[    3.641357] NEST-FL: STAGE1 userspace reached — Linux 6.6.64 armv7l
+[    3.652984] NEST-FL: STAGE1 cmdline: mem=64M earlyprintk keep_bootcon panic=15 loglevel=8 ignore_loglevel rdinit=/init
+[    3.664062] NEST-FL: STAGE1 uptime: 3.65 0.00
+[    3.666107] NEST-FL: STAGE2 USB gadget serial ready (/dev/ttyGS0)
+[    3.742401] NEST-FL: STAGE2 procs: 56  mem: MemTotal:          46696 kB
+[    3.743591] NEST-FL: STAGE3 entering shell loop; watchdog will warm-reset to stock shortly
+[    3.962677] twl: Read failed (mod 0, reg 0xfd count 1)
+[    4.982086] twl: Write failed (mod 0, reg 0xfd count 1)
+[    5.791015] NEST-FL: STAGE3 still alive 5.78 1.98 (reboot to stock in 88s unless USB host)
+[    7.041992] omap_i2c 48070000.i2c: controller timed out
+[    7.072021] twl: Write failed (mod 0, reg 0xfd count 1)
+[    7.072235] ------------[ cut here ]------------
+[    7.072357] WARNING: CPU: 0 PID: 10 at drivers/phy/ti/phy-twl4030-usb.c:387 twl4030_usb_runtime_suspend+0x14/0x40
+[    7.072662] Modules linked in:
+[    7.072814] CPU: 0 PID: 10 Comm: kworker/0:1 Not tainted 6.6.64 #4
+[    7.072998] Hardware name: Generic OMAP36xx (Flattened Device Tree)
+[    7.073150] Workqueue: pm pm_runtime_work
+[    7.073364]  unwind_backtrace from show_stack+0x10/0x14
+[    7.073577]  show_stack from dump_stack_lvl+0x40/0x4c
+[    7.073791]  dump_stack_lvl from __warn+0x74/0x128
+[    7.074005]  __warn from warn_slowpath_fmt+0x130/0x228
+[    7.074218]  warn_slowpath_fmt from twl4030_usb_runtime_suspend+0x14/0x40
+[    7.074462]  twl4030_usb_runtime_suspend from __rpm_callback+0x54/0x228
+[    7.074676]  __rpm_callback from rpm_callback+0x60/0x64
+[    7.074890]  rpm_callback from rpm_suspend+0xe0/0x654
+[    7.075073]  rpm_suspend from pm_runtime_work+0x58/0xa4
+[    7.075286]  pm_runtime_work from process_one_work+0x168/0x394
+[    7.075500]  process_one_work from worker_thread+0x27c/0x4b8
+[    7.075683]  worker_thread from kthread+0xd8/0xf8
+[    7.075866]  kthread from ret_from_fork+0x14/0x20
+[    7.076019] Exception stack(0xc402dfb0 to 0xc402dff8)
+[    7.076171] dfa0:                                     00000000 00000000 00000000 00000000
+[    7.076385] dfc0: 00000000 00000000 00000000 00000000 00000000 00000000 00000000 00000000
+[    7.076599] dfe0: 00000000 00000000 00000000 00000000 00000013 00000000
+[    7.076751] ---[ end trace 0000000000000000 ]---
+[    7.102264] twl: Read failed (mod 4, reg 0x71 count 1)
+[    7.102447] VUSB1V5: failed to disable: -EREMOTEIO
+[    7.102783] twl: Read failed (mod 4, reg 0x74 count 1)
+[    7.102935] VUSB1V8: failed to disable: -EREMOTEIO
+[    7.103240] twl: Read failed (mod 4, reg 0x77 count 1)
+[    7.103393] VUSB3V1: failed to disable: -EREMOTEIO
+[    7.836822] NEST-FL: STAGE3 still alive 7.83 3.96 (reboot to stock in 86s unless USB host)
+[    9.883026] NEST-FL: STAGE3 still alive 9.87 5.96 (reboot to stock in 84s unless USB host)
+[   11.928375] NEST-FL: STAGE3 still alive 11.92 7.95 (reboot to stock in 82s unless USB host)
+[   13.972808] NEST-FL: STAGE3 still alive 13.96 9.95 (reboot to stock in 80s unless USB host)
+[   16.018157] NEST-FL: STAGE3 still alive 16.01 11.94 (reboot to stock in 78s unless USB host)
+[   18.062652] NEST-FL: STAGE3 still alive 18.05 13.93 (reboot to stock in 76s unless USB host)
+[   20.108306] NEST-FL: STAGE3 still alive 20.10 15.93 (reboot to stock in 74s unless USB host)
+[   22.152923] NEST-FL: STAGE3 still alive 22.14 17.92 (reboot to stock in 72s unless USB host)
+[   24.198211] NEST-FL: STAGE3 still alive 24.19 19.92 (reboot to stock in 70s unless USB host)
+[   26.242828] NEST-FL: STAGE3 still alive 26.23 21.91 (reboot to stock in 68s unless USB host)
+[   28.288208] NEST-FL: STAGE3 still alive 28.28 23.90 (reboot to stock in 66s unless USB host)
+[   30.332916] NEST-FL: STAGE3 still alive 30.32 25.90 (reboot to stock in 64s unless USB host)
+[   32.378417] NEST-FL: STAGE3 still alive 32.37 27.89 (reboot to stock in 62s unless USB host)
+[   33.762481] twl: Read failed (mod 4, reg 0x17 count 1)
+[   33.763000] twl: Read failed (mod 4, reg 0x1b count 1)
+[   33.763305] twl: Read failed (mod 4, reg 0x1f count 1)
+[   33.763610] twl: Read failed (mod 4, reg 0x23 count 1)
+[   33.763916] twl: Read failed (mod 4, reg 0x3b count 1)
+[   33.764251] twl: Read failed (mod 4, reg 0x27 count 1)
+[   33.764526] twl: Read failed (mod 4, reg 0x2b count 1)
+[   33.764831] twl: Read failed (mod 4, reg 0x37 count 1)
+[   33.765136] twl: Read failed (mod 4, reg 0x33 count 1)
+[   34.424041] NEST-FL: STAGE3 still alive 34.42 29.88 (reboot to stock in 60s unless USB host)
+[   36.468933] NEST-FL: STAGE3 still alive 36.46 31.88 (reboot to stock in 58s unless USB host)
+[   38.514190] NEST-FL: STAGE3 still alive 38.51 33.87 (reboot to stock in 56s unless USB host)
+[   40.558990] NEST-FL: STAGE3 still alive 40.55 35.86 (reboot to stock in 54s unless USB host)
+[   42.604370] NEST-FL: STAGE3 still alive 42.60 37.86 (reboot to stock in 52s unless USB host)
+[   44.649230] NEST-FL: STAGE3 still alive 44.64 39.85 (reboot to stock in 50s unless USB host)
+[   46.694488] NEST-FL: STAGE3 still alive 46.69 41.85 (reboot to stock in 48s unless USB host)
+[   48.739440] NEST-FL: STAGE3 still alive 48.73 43.84 (reboot to stock in 46s unless USB host)
+[   50.784515] NEST-FL: STAGE3 still alive 50.78 45.83 (reboot to stock in 44s unless USB host)
+[   52.829437] NEST-FL: STAGE3 still alive 52.82 47.83 (reboot to stock in 42s unless USB host)
+[   54.874816] NEST-FL: STAGE3 still alive 54.87 49.82 (reboot to stock in 40s unless USB host)
+[   56.919372] NEST-FL: STAGE3 still alive 56.91 51.81 (reboot to stock in 38s unless USB host)
+[   58.965179] NEST-FL: STAGE3 still alive 58.96 53.81 (reboot to stock in 36s unless USB host)
+[   61.009979] NEST-FL: STAGE3 still alive 61.00 55.80 (reboot to stock in 34s unless USB host)
+[   63.055755] NEST-FL: STAGE3 still alive 63.05 57.80 (reboot to stock in 32s unless USB host)
+[   65.100341] NEST-FL: STAGE3 still alive 65.09 59.79 (reboot to stock in 30s unless USB host)
+[   67.145568] NEST-FL: STAGE3 still alive 67.14 61.79 (reboot to stock in 28s unless USB host)
+[   69.190460] NEST-FL: STAGE3 still alive 69.18 63.78 (reboot to stock in 26s unless USB host)
+[   71.237854] NEST-FL: STAGE3 still alive 71.23 65.78 (reboot to stock in 24s unless USB host)
+[   73.282653] NEST-FL: STAGE3 still alive 73.27 67.77 (reboot to stock in 22s unless USB host)
+[   75.328033] NEST-FL: STAGE3 still alive 75.32 69.76 (reboot to stock in 20s unless USB host)
+[   77.372772] NEST-FL: STAGE3 still alive 77.36 71.76 (reboot to stock in 18s unless USB host)
+[   79.418212] NEST-FL: STAGE3 still alive 79.41 73.75 (reboot to stock in 16s unless USB host)
+[   81.462890] NEST-FL: STAGE3 still alive 81.45 75.75 (reboot to stock in 14s unless USB host)
+[   83.508331] NEST-FL: STAGE3 still alive 83.50 77.74 (reboot to stock in 12s unless USB host)
+[   85.553070] NEST-FL: STAGE3 still alive 85.54 79.73 (reboot to stock in 10s unless USB host)
+[   87.598907] NEST-FL: STAGE3 still alive 87.59 81.73 (reboot to stock in 8s unless USB host)
+[   89.644226] NEST-FL: STAGE3 still alive 89.64 83.72 (reboot to stock in 6s unless USB host)
+[   91.689575] NEST-FL: STAGE3 still alive 91.68 85.72 (reboot to stock in 4s unless USB host)
+[   93.734985] NEST-FL: STAGE3 still alive 93.73 87.71 (reboot to stock in 2s unless USB host)
+[   95.779449] NEST-FL: STAGE3 still alive 95.77 89.71 (reboot to stock in 0s unless USB host)
+[   95.780700] NEST-FL: STAGE5 grace over, no USB host -> warm reboot to stock (DRAM logs preserved)
+[   95.789764] sysrq: Resetting

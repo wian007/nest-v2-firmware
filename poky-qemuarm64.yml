@@ -1,0 +1,21 @@
+header:
+  version: 13
+
+distro: poky
+machine: qemuarm64
+
+repos:
+  poky:
+    url: http://git.yoctoproject.org/poky
+    refspec: master
+    layers:
+      meta:
+      meta-poky:
+
+local_conf_header:
+  base: |
+    CONF_VERSION = "2"
+    INIT_MANAGER = "systemd"
+
+target:
+  - core-image-minimal

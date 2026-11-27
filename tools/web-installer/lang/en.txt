@@ -1,0 +1,99 @@
+# English texts of the installer page. key=text; "#" starts a comment line.
+# To add a language: copy this file to <code>.txt, translate, and add the code to LANGS in js/app.js.
+lang.name=English
+title=J49 installer
+subtitle=Our own software on a Nest Learning Thermostat (2nd generation), from the browser
+language=Language
+theme=Theme
+
+nobrowser=This browser cannot reach USB devices. Use Chrome or Edge on a computer (Windows, Linux, macOS or ChromeOS).
+insecure=The page must be opened over https or from localhost; otherwise the browser does not allow USB.
+
+warn.title=Before you start
+warn.1=This replaces the firmware of the thermostat. It then no longer works with the Nest or Google Home apps.
+warn.2=It switches real heating and has no warranty. Read the disclaimer of the project first.
+warn.3=Only the 2nd generation Nest Learning Thermostat (board J49, Display-2.x) is supported. On any other model this will fail or do damage.
+warn.4=Make the backup. Without it there is no way back to the stock firmware.
+warn.agree=I have read this and the disclaimer, and this is my own thermostat
+windows=On Windows the first step needs the WinUSB driver once: start Zadig, choose "Options > List All Devices" while the thermostat is in its boot mode (step 2), select "OMAP3630" (USB ID 0451 D00E) and install WinUSB. Do the same later for "USB download gadget" (0451 DF10).
+
+mode.title=What do you want to do?
+mode.install=Install
+mode.install.d=Backup, then write our software
+mode.backup=Backup only
+mode.backup.d=Read the whole flash memory into a file; change nothing
+mode.restore=Restore
+mode.restore.d=Put a backup file back (back to stock)
+
+files.title=1. Files
+files.auto=The images that come with this page were found.
+files.manual=Choose the image files. The project documentation says how to build or where to get each one.
+files.xload=First loader (x-load.bin)
+files.ubootram=Loader U-Boot for RAM (u-boot.bin)
+files.service=Service kernel (nest-service-uImage)
+files.uboot=Our U-Boot (u-boot-nest-j49.uimg)
+files.installer=Installer kernel (zImage-installer)
+files.rootfs=Root file system (j49-image .jffs2)
+files.kernel=Kernel (uImage-j49-a)
+files.backupfile=Backup file to restore (.j49backup)
+files.missing=Not all files are there yet.
+files.badsum=The checksum of this file is not the expected one
+files.ok=ok
+files.unknown=not checked (no checksum known)
+
+rom.title=2. Start the thermostat in its boot mode
+rom.1=Take the thermostat off the wall and connect it to this computer with a USB cable that carries data.
+rom.2=Click "Connect". A list opens; leave it open.
+rom.3=Hold the ring pressed for 10 to 15 seconds, until the screen goes dark and the thermostat restarts. Keep it pressed.
+rom.4=When "OMAP3630" appears in the list, select it and click "Connect" there. You can let go of the ring.
+rom.button=Connect
+rom.sending=Sending the loaders
+rom.done=The thermostat starts the service kernel. Its screen shows text; this takes about 20 seconds.
+
+svc.title=3. Connect to the service
+svc.1=The thermostat is now a USB serial port. Click the button and choose "Gadget Serial" in the list.
+svc.button=Connect to the service
+svc.waiting=Waiting for the service to answer
+svc.found=Connected. The thermostat has {n} partitions, {mb} MB.
+
+backup.title=4. Backup
+backup.1=The whole flash memory is read into one file on this computer. This takes a few minutes. Keep the file: it is the only way back.
+backup.button=Choose where to save and start
+backup.reading=Reading {name}
+backup.verify=Checking the file
+backup.done=Backup made and checked: {mb} MB in the file.
+backup.errors=WARNING: {n} blocks could not be read without errors. The backup may not be complete.
+backup.skip=I have a backup of this thermostat already; skip this step
+
+uboot.title=5. Write the boot loader
+uboot.1=Our U-Boot goes into both boot loader partitions. From here on the thermostat no longer starts the stock firmware.
+uboot.button=Write the boot loader
+uboot.writing=Writing {name}
+uboot.done=Written and read back. The thermostat restarts into our U-Boot.
+
+dfu.title=6. Install the system
+dfu.1=The screen is dark now: that is normal. Click the button and choose "USB download gadget" in the list.
+dfu.button=Connect and install
+dfu.stage2=Sending the installer and the system ({mb} MB)
+dfu.installing=The thermostat writes the system to its flash memory. Its screen shows the progress; this takes a few minutes. Leave it connected. When it is done it shows up on USB again by itself.
+dfu.reconnect=If nothing happens after the thermostat is done, click here and choose "USB download gadget" again
+dfu.stage3=Writing the kernel
+dfu.done=Installed. The thermostat starts our software.
+
+restore.title=4. Put the backup back
+restore.1=Every partition of the backup file is written back, except the first loader, which the install never changes.
+restore.check=Checking the backup file
+restore.button=Write the backup back
+restore.writing=Writing {name}
+restore.done=The backup is back. The thermostat restarts into the stock firmware.
+restore.other=This backup has other partitions than this thermostat. It is not written.
+
+done.title=Done
+done.install=The thermostat now runs the J49 software. Heating is off until you switch it on. For WiFi, see the installation guide: the first network is set over the USB serial console.
+done.backup=The backup is made. Nothing on the thermostat was changed. Take it off USB and hold the ring 10 seconds to restart it.
+done.restore=The thermostat is back on the stock firmware.
+
+log=Log
+error=It went wrong
+again=Try this step again
+cancelled=Nothing was chosen.

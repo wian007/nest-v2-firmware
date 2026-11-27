@@ -1,0 +1,273 @@
+backlight: add a device-tree driver for the TI LM3530 in I2C mode
+
+The in-tree leds-lm3530 driver is platform-data only. The Nest J49 has an LM3530
+on I2C3 at 0x36 (HWEN gpio177, VAUX1 supply) driving the panel backlight; this
+small backlight-class driver reproduces the stock init sequence (29.5 mA full
+scale, exponential ramp, ALS off) and exposes /sys/class/backlight/lm3530.
+
+Upstream-Status: Pending
+Signed-off-by: J49 project <j49@users.noreply.github.com>
+
+diff -Nur a/drivers/video/backlight/Kconfig b/drivers/video/backlight/Kconfig
+--- a/drivers/video/backlight/Kconfig	2026-10-31 16:34:32.213817905 +0100
++++ b/drivers/video/backlight/Kconfig	2026-10-31 16:34:32.232958262 +0100
+@@ -452,6 +452,14 @@
+ 	help
+ 	  If you have a Rohm BD6107 say Y to enable the backlight driver.
+ 
++config BACKLIGHT_LM3530_BL
++	tristate "TI LM3530 backlight driver (I2C brightness mode, device tree)"
++	depends on I2C
++	help
++	  Backlight-class driver for the TI/National LM3530 LED driver in
++	  manual I2C brightness mode (ti,lm3530 with hwen-gpios / vcc-supply).
++	  Used by the Nest Learning Thermostat 2nd gen (J49) display.
++
+ config BACKLIGHT_ARCXCNN
+ 	tristate "Backlight driver for the Arctic Sands ARCxCnnnn family"
+ 	depends on I2C
+diff -Nur a/drivers/video/backlight/lm3530_bl.c b/drivers/video/backlight/lm3530_bl.c
+--- a/drivers/video/backlight/lm3530_bl.c	1970-01-01 01:00:00.000000000 +0100
++++ b/drivers/video/backlight/lm3530_bl.c	2026-10-31 16:33:42.292966550 +0100
+@@ -0,0 +1,230 @@
++// SPDX-License-Identifier: GPL-2.0-only
++/*
++ * Backlight driver for the TI/National LM3530 in I2C brightness mode.
++ *
++ * The in-tree leds-lm3530 driver takes platform data only. This is a small
++ * device-tree driven backlight-class driver for boards that run the LM3530
++ * in manual (I2C) mode, written for the Nest Learning Thermostat 2nd gen
++ * (J49): LM3530 on I2C3 at 0x36, HWEN on gpio177, powered from the TWL4030
++ * VAUX1 LDO. Register settings follow the stock board's platform data:
++ * 29.5 mA full-scale current, exponential ramp, ALS off.
++ */
++
++#include <linux/backlight.h>
++#include <linux/delay.h>
++#include <linux/fb.h>
++#include <linux/gpio/consumer.h>
++#include <linux/i2c.h>
++#include <linux/module.h>
++#include <linux/of.h>
++#include <linux/property.h>
++#include <linux/regulator/consumer.h>
++
++#define LM3530_GEN_CONFIG	0x10
++#define   LM3530_GEN_I2C_EN	BIT(0)
++#define   LM3530_GEN_CURR_29MA	(7 << 2)	/* full-scale current code 7 */
++#define LM3530_ALS_CONFIG	0x20
++#define LM3530_BRT_RAMP_RATE	0x30
++#define LM3530_ALS_ZONE_INFO	0x40
++#define LM3530_ALS_IMP_SELECT	0x41
++#define LM3530_ALS_ZB0		0x60
++#define LM3530_ALS_ZB1		0x61
++#define LM3530_ALS_ZB2		0x62
++#define LM3530_ALS_ZB3		0x63
++#define LM3530_ALS_Z0T		0x70
++#define LM3530_ALS_Z1T		0x71
++#define LM3530_ALS_Z2T		0x72
++#define LM3530_ALS_Z3T		0x73
++#define LM3530_ALS_Z4T		0x74
++#define LM3530_BRT_CTRL		0xa0
++
++#define LM3530_HW_MAX_BRIGHTNESS	0x7f
++#define LM3530_DEF_MAX_BRIGHTNESS	0x78	/* stock J49 max_brightness */
++#define LM3530_DEF_BRIGHTNESS		0x6c	/* stock cmdline brightness=108 */
++
++/* GEN_CONFIG without I2C_EN: configured but dark. */
++#define LM3530_GEN_IDLE		LM3530_GEN_CURR_29MA
++#define LM3530_GEN_ON		(LM3530_GEN_CURR_29MA | LM3530_GEN_I2C_EN)
++
++struct lm3530_bl {
++	struct i2c_client *client;
++	struct gpio_desc *hwen;
++	struct regulator *vcc;
++	bool on;
++};
++
++/*
++ * Stock lm3530_init_registers() order: GEN_CONFIG without I2C_EN first, ALS
++ * off (power-on ALS_CONFIG is 0xac = ALS enabled), 2 s/2 s ramp, zone
++ * boundaries cleared, zone targets at the chip defaults, brightness 0; I2C_EN
++ * is set last by the first brightness update.
++ */
++static const u8 lm3530_init_seq[][2] = {
++	{ LM3530_GEN_CONFIG,	LM3530_GEN_IDLE },
++	{ LM3530_ALS_CONFIG,	0x00 },
++	{ LM3530_BRT_RAMP_RATE,	0x2d },
++	{ LM3530_ALS_ZONE_INFO,	0x00 },
++	{ LM3530_ALS_IMP_SELECT, 0x00 },
++	{ LM3530_BRT_CTRL,	0x00 },
++	{ LM3530_ALS_ZB0,	0x00 },
++	{ LM3530_ALS_ZB1,	0x00 },
++	{ LM3530_ALS_ZB2,	0x00 },
++	{ LM3530_ALS_ZB3,	0x00 },
++	{ LM3530_ALS_Z0T,	0x7f },
++	{ LM3530_ALS_Z1T,	0x66 },
++	{ LM3530_ALS_Z2T,	0x4c },
++	{ LM3530_ALS_Z3T,	0x33 },
++	{ LM3530_ALS_Z4T,	0x19 },
++};
++
++static int lm3530_bl_write(struct lm3530_bl *lp, u8 reg, u8 val)
++{
++	int ret = i2c_smbus_write_byte_data(lp->client, reg, val);
++
++	if (ret)
++		dev_err(&lp->client->dev, "write reg 0x%02x failed: %d\n", reg, ret);
++	return ret;
++}
++
++static int lm3530_bl_init(struct lm3530_bl *lp)
++{
++	int i, ret;
++
++	for (i = 0; i < ARRAY_SIZE(lm3530_init_seq); i++) {
++		ret = lm3530_bl_write(lp, lm3530_init_seq[i][0], lm3530_init_seq[i][1]);
++		if (ret)
++			return ret;
++	}
++	lp->on = false;
++	return 0;
++}
++
++static int lm3530_bl_update_status(struct backlight_device *bl)
++{
++	struct lm3530_bl *lp = bl_get_data(bl);
++	int brightness = backlight_get_brightness(bl);
++	int ret;
++
++	if (brightness > 0) {
++		if (!lp->on) {
++			ret = lm3530_bl_write(lp, LM3530_GEN_CONFIG, LM3530_GEN_ON);
++			if (ret)
++				return ret;
++			lp->on = true;
++		}
++		return lm3530_bl_write(lp, LM3530_BRT_CTRL, brightness);
++	}
++
++	ret = lm3530_bl_write(lp, LM3530_BRT_CTRL, 0);
++	if (ret)
++		return ret;
++	lp->on = false;
++	return lm3530_bl_write(lp, LM3530_GEN_CONFIG, LM3530_GEN_IDLE);
++}
++
++static const struct backlight_ops lm3530_bl_ops = {
++	.options	= BL_CORE_SUSPENDRESUME,
++	.update_status	= lm3530_bl_update_status,
++};
++
++static void lm3530_bl_power_off(void *data)
++{
++	struct lm3530_bl *lp = data;
++
++	if (lp->hwen)
++		gpiod_set_value_cansleep(lp->hwen, 0);
++	if (lp->vcc)
++		regulator_disable(lp->vcc);
++}
++
++static int lm3530_bl_probe(struct i2c_client *client)
++{
++	struct device *dev = &client->dev;
++	struct backlight_properties props = {};
++	struct backlight_device *bl;
++	struct lm3530_bl *lp;
++	u32 val;
++	int ret;
++
++	lp = devm_kzalloc(dev, sizeof(*lp), GFP_KERNEL);
++	if (!lp)
++		return -ENOMEM;
++	lp->client = client;
++
++	lp->vcc = devm_regulator_get_optional(dev, "vcc");
++	if (IS_ERR(lp->vcc)) {
++		if (PTR_ERR(lp->vcc) != -ENODEV)
++			return dev_err_probe(dev, PTR_ERR(lp->vcc), "vcc supply\n");
++		lp->vcc = NULL;
++	}
++
++	/* HWEN low = chip off and absent from the bus; assert it before probing. */
++	lp->hwen = devm_gpiod_get_optional(dev, "hwen", GPIOD_OUT_HIGH);
++	if (IS_ERR(lp->hwen))
++		return dev_err_probe(dev, PTR_ERR(lp->hwen), "hwen gpio\n");
++
++	if (lp->vcc) {
++		ret = regulator_enable(lp->vcc);
++		if (ret)
++			return dev_err_probe(dev, ret, "enable vcc\n");
++	}
++	ret = devm_add_action_or_reset(dev, lm3530_bl_power_off, lp);
++	if (ret)
++		return ret;
++	usleep_range(2000, 3000);
++
++	ret = lm3530_bl_init(lp);
++	if (ret)
++		return dev_err_probe(dev, ret, "chip init failed\n");
++
++	props.type = BACKLIGHT_RAW;
++	props.max_brightness = LM3530_DEF_MAX_BRIGHTNESS;
++	if (!device_property_read_u32(dev, "max-brightness", &val))
++		props.max_brightness = min_t(u32, val, LM3530_HW_MAX_BRIGHTNESS);
++	props.brightness = min_t(u32, LM3530_DEF_BRIGHTNESS, props.max_brightness);
++	if (!device_property_read_u32(dev, "default-brightness", &val))
++		props.brightness = min_t(u32, val, props.max_brightness);
++	props.power = FB_BLANK_UNBLANK;
++
++	bl = devm_backlight_device_register(dev, "lm3530", dev, lp,
++					    &lm3530_bl_ops, &props);
++	if (IS_ERR(bl))
++		return dev_err_probe(dev, PTR_ERR(bl), "register backlight\n");
++	i2c_set_clientdata(client, bl);
++
++	return backlight_update_status(bl);
++}
++
++static void lm3530_bl_remove(struct i2c_client *client)
++{
++	struct backlight_device *bl = i2c_get_clientdata(client);
++
++	bl->props.brightness = 0;
++	backlight_update_status(bl);
++}
++
++static const struct of_device_id lm3530_bl_of_match[] = {
++	{ .compatible = "ti,lm3530" },
++	{ }
++};
++MODULE_DEVICE_TABLE(of, lm3530_bl_of_match);
++
++static const struct i2c_device_id lm3530_bl_id[] = {
++	{ "lm3530-bl" },
++	{ }
++};
++MODULE_DEVICE_TABLE(i2c, lm3530_bl_id);
++
++static struct i2c_driver lm3530_bl_driver = {
++	.driver = {
++		.name		= "lm3530-bl",
++		.of_match_table	= lm3530_bl_of_match,
++	},
++	.probe		= lm3530_bl_probe,
++	.remove		= lm3530_bl_remove,
++	.id_table	= lm3530_bl_id,
++};
++module_i2c_driver(lm3530_bl_driver);
++
++MODULE_DESCRIPTION("TI LM3530 backlight driver (I2C brightness mode)");
++MODULE_LICENSE("GPL");
+diff -Nur a/drivers/video/backlight/Makefile b/drivers/video/backlight/Makefile
+--- a/drivers/video/backlight/Makefile	2026-10-31 16:34:32.214082609 +0100
++++ b/drivers/video/backlight/Makefile	2026-10-31 16:34:32.233093694 +0100
+@@ -55,6 +55,7 @@
+ obj-$(CONFIG_BACKLIGHT_SKY81452)	+= sky81452-backlight.o
+ obj-$(CONFIG_BACKLIGHT_TPS65217)	+= tps65217_bl.o
+ obj-$(CONFIG_BACKLIGHT_WM831X)		+= wm831x_bl.o
++obj-$(CONFIG_BACKLIGHT_LM3530_BL)	+= lm3530_bl.o
+ obj-$(CONFIG_BACKLIGHT_ARCXCNN) 	+= arcxcnn_bl.o
+ obj-$(CONFIG_BACKLIGHT_RAVE_SP)		+= rave-sp-backlight.o
+ obj-$(CONFIG_BACKLIGHT_LED)		+= led_bl.o

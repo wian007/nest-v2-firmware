@@ -1,0 +1,53 @@
+diff -uNr a/cmd/Makefile b/cmd/Makefile
+--- a/cmd/Makefile	2026-11-23 21:11:07.762995103 +0100
++++ b/cmd/Makefile	2026-11-23 21:11:07.765540486 +0100
+@@ -290,3 +290,4 @@
+ 
+ CFLAGS_ethsw.o := -Wno-enum-conversion
+ obj-y += nest_jumpz.o
++obj-y += nest_usb.o
+diff -uNr a/cmd/nest_usb.c b/cmd/nest_usb.c
+--- a/cmd/nest_usb.c	1970-01-01 01:00:00.000000000 +0100
++++ b/cmd/nest_usb.c	2026-11-23 21:11:07.767540524 +0100
+@@ -0,0 +1,41 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * nestusb [ms] -- bring the USB gadget side up exactly like the console/DFU paths do
++ * (MUSB + TWL4030 PHY + a CDC-ACM gadget), service it for <ms> milliseconds (default 1500),
++ * and return WITHOUT tearing it down.
++ *
++ * Why: after a plain cold boot the mainline kernel's musb reports
++ * "VBUS_ERROR in b_idle (<SessEnd)" and g_serial never enumerates; after a U-Boot USB
++ * session the very same kernel enumerates fine. The PHY/VBUS state U-Boot's gadget leaves
++ * behind is what the kernel needs, so nandboot runs this right before bootm.
++ */
++#include <command.h>
++#include <g_dnl.h>
++#include <linux/delay.h>
++#include <linux/usb/gadget.h>
++#include <vsprintf.h>
++
++static int do_nestusb(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
++{
++	struct udevice *udc;
++	ulong ms = argc > 1 ? dectoul(argv[1], NULL) : 1500;
++	ulong i;
++	int ret;
++
++	ret = udc_device_get_by_index(0, &udc);
++	if (ret)
++		return CMD_RET_FAILURE;
++	g_dnl_clear_detach();
++	ret = g_dnl_register("usb_serial_acm");
++	if (ret)
++		return CMD_RET_FAILURE;
++	for (i = 0; i < ms; i++) {
++		dm_usb_gadget_handle_interrupts(udc);
++		mdelay(1);
++	}
++	return CMD_RET_SUCCESS;
++}
++
++U_BOOT_CMD(nestusb, 2, 0, do_nestusb,
++	   "start the USB gadget (CDC-ACM) for a moment and leave it up",
++	   "[ms]  - default 1500");

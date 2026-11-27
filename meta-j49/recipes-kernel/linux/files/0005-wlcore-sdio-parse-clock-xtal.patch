@@ -1,0 +1,20 @@
+wlcore: sdio: honour the clock-xtal DT property
+
+6.6 only parses clock-xtal in wlcore/spi.c; the WL1271 on the Nest J49 is on SDIO
+with a 26 MHz crystal (WL12XX_REFCLOCK_26_XTAL in the stock board file). Without
+it the firmware boots but never raises its IRQ (ELP wakeup timeout, 0 scan results).
+
+Upstream-Status: Pending
+Signed-off-by: J49 project <j49@users.noreply.github.com>
+
+--- a/drivers/net/wireless/ti/wlcore/sdio.c	2026-10-28 22:12:24.372403240 +0100
++++ b/drivers/net/wireless/ti/wlcore/sdio.c	2026-10-28 22:12:23.914739915 +0100
+@@ -240,6 +240,8 @@
+ 	/* optional clock frequency params */
+ 	of_property_read_u32(np, "ref-clock-frequency",
+ 			     &pdev_data->ref_clock_freq);
++	/* like wlcore/spi.c: WL127x boards with a crystal reference (e.g. Nest j49) */
++	pdev_data->ref_clock_xtal = of_property_read_bool(np, "clock-xtal");
+ 	of_property_read_u32(np, "tcxo-clock-frequency",
+ 			     &pdev_data->tcxo_clock_freq);
+ 

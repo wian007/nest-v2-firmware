@@ -1,0 +1,79 @@
+#!/bin/sh
+# j49-wlan-reprobe: wl12xx is built into the kernel and probes at ~1.6 s, before / is mounted,
+# so its request for ti-connectivity/wl127x-nvs.bin fails and the WL1271 is left with the
+# placeholder MAC 00:00:00:00:00:01 ("wlcore: ERROR NVS file is needed during boot" later).
+# Once the rootfs is up, unbind/rebind the device so the NVS loads, then WAIT for wlan0 to come
+# back with a real MAC: wlcore registers the netdev from the asynchronous NVS callback, so the
+# bind write returns before wlan0 exists and wpa_supplicant/networkd must not start before it.
+
+# --- provisioning of device-unique files (never part of the image) -------------------------
+# The scratch partition (our own jffs2, not erased by a root reinstall) carries two trees:
+#   /j49-persist/rootfs/    copied into / when the target does NOT exist yet: WiFi credentials,
+#                           SSH host key. They survive a reinstall and never leave the device.
+#   /j49-persist/override/  copied into / whenever the target differs: files that must replace
+#                           what the image ships. The one that matters is this unit's WL1271 NVS
+#                           (MAC address + radio calibration). Without it wlcore finds an
+#                           unconfigured MAC, the fuse MAC is zero, and it picks a RANDOM MAC on
+#                           every boot, i.e. a new DHCP address each time.
+# The NVS originally comes from stock's system-config partition (wl12xx-nvs.bin, 912 bytes). That
+# partition was written with stock's ECC layout and our kernel reads it with ECC errors: on
+# 2026-11-26 the file was there on one boot and gone on the next. So it is only a best-effort
+# source: when it does read, the copy is saved into override/ and used from there from then on.
+mtdnum() { sed -n "s/^mtd\([0-9]*\):.*\"$1\"\$/\1/p" /proc/mtd; }
+FW=/lib/firmware/ti-connectivity/wl127x-nvs.bin
+changed=0
+copy_tree() { # $1 = source tree, $2 = "missing" | "differs"
+    [ -d "$1" ] || return 0
+    ( cd "$1" && find . -type f ) > /run/j49-files
+    while read -r f; do
+        f=${f#./}
+        if [ "$2" = missing ]; then [ -e "/$f" ] && continue; else cmp -s "$1/$f" "/$f" && continue; fi
+        mkdir -p "/$(dirname "$f")" && cp -p "$1/$f" "/$f.j49new" && mv "/$f.j49new" "/$f" || continue
+        echo "provisioned /$f from scratch ($2)"
+        [ "/$f" = "$FW" ] && changed=1
+    done < /run/j49-files
+    rm -f /run/j49-files
+}
+n=$(mtdnum scratch)
+if [ -n "$n" ] && mkdir -p /run/j49-scratch && mount -t jffs2 -o ro /dev/mtdblock$n /run/j49-scratch 2>/dev/null; then
+    copy_tree /run/j49-scratch/j49-persist/rootfs missing
+    copy_tree /run/j49-scratch/j49-persist/override differs
+    have_nvs=0; [ -s "/run/j49-scratch/j49-persist/override$FW" ] && have_nvs=1
+    umount /run/j49-scratch
+    if [ "$have_nvs" = 0 ]; then
+        s=$(mtdnum system-config)
+        if [ -n "$s" ] && mkdir -p /run/j49-sc && mount -t jffs2 -o ro /dev/mtdblock$s /run/j49-sc 2>/dev/null; then
+            src=/run/j49-sc/wl12xx-nvs.bin
+            if [ -s "$src" ] && [ "$(wc -c < "$src")" = 912 ] && cp "$src" /run/j49-nvs; then
+                echo "found this unit's WL1271 NVS on system-config"
+            fi
+            umount /run/j49-sc
+        fi
+        if [ -s /run/j49-nvs ]; then
+            cmp -s /run/j49-nvs "$FW" || { cp /run/j49-nvs "$FW.j49new" && chmod 644 "$FW.j49new" && mv "$FW.j49new" "$FW" && changed=1; }
+            if mount -t jffs2 /dev/mtdblock$n /run/j49-scratch 2>/dev/null; then
+                d="/run/j49-scratch/j49-persist/override$(dirname "$FW")"
+                mkdir -p "$d" && cp /run/j49-nvs "$d/$(basename "$FW")" && echo "saved the NVS to scratch (override)"
+                sync; umount /run/j49-scratch
+            fi
+            rm -f /run/j49-nvs
+        else
+            echo "no NVS for this unit found: wlan0 will get a random MAC"
+        fi
+    fi
+fi
+# ---------------------------------------------------------------------------------------------
+
+D=/sys/bus/platform/drivers/wl12xx_driver
+dev=$(ls "$D" 2>/dev/null | grep '^wl12xx\.' | head -n 1)
+[ -n "$dev" ] || { echo "no wl12xx device bound (no SDIO card on mmc2?)"; exit 0; }
+mac() { cat /sys/class/net/wlan0/address 2>/dev/null; }
+bogus() { case "$1" in ""|00:00:00:00:00:00|00:00:00:00:00:01) return 0;; esac; return 1; }
+m=$(mac)
+if ! bogus "$m" && [ "$changed" = 0 ]; then echo "wlan0 already has MAC $m, nothing to do"; exit 0; fi
+echo "wlan0 MAC is '${m:-missing}' (nvs changed: $changed): re-probing $dev"
+echo "$dev" > "$D/unbind"; sleep 1; echo "$dev" > "$D/bind"
+i=0; while [ $i -lt 20 ]; do m=$(mac); bogus "$m" || break; sleep 1; i=$((i + 1)); done
+command -v udevadm >/dev/null 2>&1 && udevadm settle -t 10
+if bogus "$m"; then echo "re-probed $dev but wlan0 MAC is still '${m:-missing}' after $i s"; exit 1; fi
+echo "re-probed $dev: wlan0 MAC $m after $i s"

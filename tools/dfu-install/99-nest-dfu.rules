@@ -1,0 +1,6 @@
+# Nest J49 DFU installer: the installer U-Boot's MUSB DFU gadget
+# (CONFIG_USB_GADGET_VENDOR_NUM/PRODUCT_NUM = 0451:df10) and the stock
+# OMAP3 ROM USB peripheral-boot window (0451:d00e, same VID; PID differs).
+# Group "users" + uaccess lets dfu-util/omap_loader run unprivileged.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0451", ATTR{idProduct}=="df10", TAG+="uaccess", GROUP="users", MODE="0660"
+SUBSYSTEM=="usb", ATTR{idVendor}=="0451", ATTR{idProduct}=="d00e", TAG+="uaccess", GROUP="users", MODE="0660"

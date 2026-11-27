@@ -1,0 +1,554 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Nest Learning Thermostat 2nd Gen (codename "diamond", j49)
+ * SoC: OMAP3630 class (DM3730/AM3703), confirmed via CONTROL_IDCODE 0x2B89102F.
+ * Minimal DT for modern-kernel first light via kexec: RAM, TWL4030 PMIC
+ * (USB PHY + regulators), MUSB in peripheral mode for a USB-gadget console,
+ * and ramoops + a DEBUG_LL DRAM ring as the hands-free log channels. No display/wifi/zigbee yet.
+ */
+/dts-v1/;
+
+#include "omap36xx.dtsi"
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/gpio/gpio.h>
+#include <dt-bindings/pinctrl/omap.h>
+
+/ {
+	model = "Nest Learning Thermostat 2nd Gen (J49)";
+	compatible = "nest,j49", "ti,omap3630", "ti,omap36xx", "ti,omap3";
+
+	cpus {
+		cpu@0 {
+			cpu0-supply = <&vcc>;
+		};
+	};
+
+	memory@80000000 {
+		device_type = "memory";
+		reg = <0x80000000 0x04000000>; /* 64 MB */
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/*
+		 * Post-mortem log regions, read back from stock via /dev/mem after the
+		 * watchdog warm reset. They must sit ABOVE stock's RAM top (stock boots
+		 * with mem=62M => 0x83e00000; its VRAM is the 2 MB just below that) and
+		 * BELOW U-Boot's footprint: U-Boot relocates to the top of RAM and
+		 * clears a ~500 KB framebuffer + heap/stack from ~0x83f03000 up to
+		 * 0x84000000 on EVERY boot (measured 2026-10-27: markers at 0x83f10000+
+		 * zeroed, stale data at 0x83e00000..0x83f00000 untouched). So the
+		 * usable window is 0x83e00000..0x83f00000.
+		 *
+		 * ramoops: console-only 256 KB, ecc off (plain text). ramring: 64 KB
+		 * DEBUG_LL ring (arch/arm/include/debug/ramring.S), deliberately NOT
+		 * no-map so the linear mapping covers it after paging_init.
+		 */
+		ramoops@83e00000 {
+			compatible = "ramoops";
+			reg = <0x83e00000 0x00040000>; /* 256 KB, console-only */
+			console-size = <0x00040000>;
+		};
+
+		ramring@83e80000 {
+			reg = <0x83e80000 0x00010000>; /* 64 KB DEBUG_LL DRAM ring */
+		};
+	};
+
+	chosen {
+		/* No debug UART wired on this board: the panel (fbcon on tty0) is the console.
+		 * Set here because stock u-boot 2012.10 has silent=1 in its default env, so its
+		 * fixup_silent_linux() blanks any console= in bootargs (the kernel sees "console="
+		 * = ttynull). NOTE: on a u-boot (ATAG) boot this property is only kept when the
+		 * kernel has CONFIG_ARM_ATAG_DTB_COMPAT_CMDLINE_EXTEND=y (j49.cfg); with the
+		 * default CMDLINE_FROM_BOOTLOADER the ATAG cmdline REPLACES it (seen 2026-11-07:
+		 * backlight on, no text). A kexec boot passes its own cmdline and ignores this. */
+		bootargs = "console=tty0";
+	};
+};
+
+&i2c1 {
+	/* 400 kHz, not the 2.6 MHz HS mode stock uses: with HS the TWL4030 NACKs
+	 * every transfer after the first omap_i2c runtime-suspend (first-light log,
+	 * 2026-10-27: "twl: Write failed (mod 0, reg 0xfd)", VUSB -EREMOTEIO), which
+	 * also kills VBUS detection -> no g_serial enumeration. */
+	clock-frequency = <400000>;
+	/* Keep the I2C1 hwmod clocked and skip its (always failing, also on stock)
+	 * softreset: on this board the TWL4030 NACKs on every slave address right
+	 * after the first omap_i2c runtime-suspend/resume (first failure at the
+	 * 2 s twl4030-usb link-status poll), which kills VBUS detection. */
+	ti,no-idle;
+	ti,no-reset-on-init;
+
+	twl: twl@48 {
+		reg = <0x48>;
+		interrupts = <7>; /* SYS_NIRQ cascaded to intc */
+		interrupt-parent = <&intc>;
+		/* HFCLKIN = SYS_CLKOUT1 (19.2 MHz, PRM_CLKOUT_CTRL bit 7). clk_disable_unused()
+		 * gated it in jumps 8-25 and took the PMIC off I2C1; twl-core now holds it
+		 * (patch 0003) through this consumer reference. */
+		clocks = <&sys_clkout1>;
+		clock-names = "fck";
+	};
+};
+
+#include "twl4030.dtsi"
+#include "twl4030_omap3.dtsi"
+
+&usb_otg_hs {
+	interface-type = <0>;
+	usb-phy = <&usb2_phy>;
+	phys = <&usb2_phy>;
+	phy-names = "usb2-phy";
+	/* 3 = OTG. Was 2 (peripheral-only) so the gadget console always won. With
+	 * OTG the role follows the ID pin: a floating ID (normal cable to a PC) is
+	 * still peripheral, so boot behaviour is the same. It also lets us switch to
+	 * host at runtime for a USB audio input:  echo host > .../musb-hdrc.0.auto/mode
+	 * (untested on this PHY). The Nest cannot source VBUS: use a powered hub. */
+	mode = <3>;
+	power = <50>;
+};
+
+/* GPIO banks: the OMAP hwmod layer softresets every hwmod at init unless told
+ * otherwise. On this board that wiped all stock GPIO outputs (USB-console
+ * session 2026-10-28: all six banks OE=0xFFFFFFFF, DATAOUT=0 after kexec), which
+ * powers down the I2C2/I2C3 sensors (ring 0x57, 0x36 both vanished), the LCD
+ * and the backplate reset line. Keep the state the bootloader/stock left. */
+&gpio1 { ti,no-reset-on-init; };
+&gpio2 { ti,no-reset-on-init; };
+&gpio3 { ti,no-reset-on-init; };
+&gpio4 { ti,no-reset-on-init; };
+&gpio5 { ti,no-reset-on-init; };
+&gpio6 { ti,no-reset-on-init; };
+
+/* The 0x36 device on I2C3 is powered from VAUX1 (3.0 V); stock's kexec shutdown
+ * switches the LDO off and nothing in 6.6 claims it (USB session 3, 2026-10-28). */
+&vaux1 {
+	regulator-always-on;
+};
+
+/ {
+	/* TI WL1271 power: stock drives gpio103 (its "vmmc2" GPIO) high; stock's
+	 * kexec shutdown leaves it low. gpio4 bit 7 = gpio_103. */
+	wlan_en: regulator-wlan-en {
+		compatible = "regulator-fixed";
+		regulator-name = "wlan_en";
+		regulator-min-microvolt = <1800000>;
+		regulator-max-microvolt = <1800000>;
+		gpio = <&gpio4 7 GPIO_ACTIVE_HIGH>;
+		startup-delay-us = <70000>;
+		enable-active-high;
+		/* Stock keeps the TWL4030 VMMC2 LDO at 1.8 V (DEV_GRP 0x2e, DEDICATED 0x05) and so does
+		 * u-boot on a cold boot; tie it to WLAN_EN so the regulator core keeps it on instead of
+		 * switching it off as "unused" at late init. NOTE: the cold-boot "mmc1: Failed to
+		 * initialize a non-removable card" was NOT this LDO but CONTROL_DEVCONF1 bit 6
+		 * (MMCSDIO2ADPCLKISEL), fixed by kernel patch 0007 (pdata-quirks, 2026-11-13). */
+		vin-supply = <&vmmc2>;
+	};
+};
+
+&vmmc2 {
+	/* Stock programs VSEL 5 = 1.8 V, which twl-regulator.c marks UNSUP for VMMC2; the
+	 * nearest supported step is 1.85 V (VSEL 6), inside the WL1271 VIO range (1.7-1.95 V). */
+	regulator-min-microvolt = <1850000>;
+	regulator-max-microvolt = <1850000>;
+};
+
+/* WL1271 on MMC2 (SDIO). With gpio103 high the card answered the SDIO init on
+ * 6.6 but failed on "card claims to support voltages below defined range", the
+ * classic missing-vmmc-supply symptom. IRQ = gpio102 ("WL127x IRQ", gpio4 bit 6,
+ * level-high in stock's table). Ref clock: the board's sys clock is 19.2 MHz.
+ * A cold u-boot boot additionally needs CONTROL_DEVCONF1.MMCSDIO2ADPCLKISEL (the MMC2
+ * loopback input clock, set by stock, reset to 0 by a cold boot): without it the card
+ * never answers ("Failed to initialize a non-removable card" at 1.6 s). Set by
+ * pdata-quirks for "nest,j49" (patch 0007), the same quirk the Nokia N9/N950 use. */
+&mmc2 {
+	vmmc-supply = <&wlan_en>;
+	bus-width = <4>;
+	non-removable;
+	cap-power-off-card;
+	/* Keep the WL1271 powered and associated while the head unit is suspended, so a packet can
+	 * wake it (stock: "wl1271_configure_wowlan ... pattern count 3"). Without this the driver
+	 * does not offer wake-on-WLAN at all ("iw phy" shows none) and powers the chip off. */
+	keep-power-in-suspend;
+	#address-cells = <1>;
+	#size-cells = <0>;
+	wlcore: wlcore@2 {
+		compatible = "ti,wl1271";
+		reg = <2>;
+		interrupt-parent = <&gpio4>;
+		interrupts = <6 IRQ_TYPE_LEVEL_HIGH>;
+		/* stock board-diamond.c display_2_0_net_init(): WL12XX_REFCLOCK_26_XTAL. With 19.2 MHz
+			 * the firmware still "booted" but never raised its IRQ again (ELP wakeup timeout, jumps 39-44). */
+			ref-clock-frequency = <26000000>;
+			clock-xtal;
+	};
+};
+
+/*
+ * Display (stock board-diamond.c "DVT" data for the j49): Tianma TM025ZDZ01 320x320 module,
+ * Samsung S6D05A1 controller on McSPI1 CS0 (9-bit SPI, mode 3, <= 10 MHz), pixels over
+ * 24-bit DPI from the DSS. Reset = gpio109 active low (stock leaves it high), lcd_id = gpio105
+ * (input, unused), panel VCC = TWL VAUX2 at 2.8 V ("lcd2v8"), DSS vdds_dsi = VPLL2.
+ * Pad values follow the stock omap_mux dump (docs/hw/omap_mux.txt): mode 0 everywhere.
+ */
+&omap3_pmx_core {
+	dss_dpi_pins: dss-dpi-pins {
+		pinctrl-single,pins = <
+			OMAP3_CORE1_IOPAD(0x20d4, PIN_OUTPUT | MUX_MODE0)   /* dss_pclk */
+			OMAP3_CORE1_IOPAD(0x20d6, PIN_OUTPUT | MUX_MODE0)   /* dss_hsync */
+			OMAP3_CORE1_IOPAD(0x20d8, PIN_OUTPUT | MUX_MODE0)   /* dss_vsync */
+			OMAP3_CORE1_IOPAD(0x20da, PIN_OUTPUT | MUX_MODE0)   /* dss_acbias */
+			OMAP3_CORE1_IOPAD(0x20dc, PIN_OUTPUT | MUX_MODE0)   /* dss_data0 */
+			OMAP3_CORE1_IOPAD(0x20de, PIN_OUTPUT | MUX_MODE0)   /* dss_data1 */
+			OMAP3_CORE1_IOPAD(0x20e0, PIN_OUTPUT | MUX_MODE0)   /* dss_data2 */
+			OMAP3_CORE1_IOPAD(0x20e2, PIN_OUTPUT | MUX_MODE0)   /* dss_data3 */
+			OMAP3_CORE1_IOPAD(0x20e4, PIN_OUTPUT | MUX_MODE0)   /* dss_data4 */
+			OMAP3_CORE1_IOPAD(0x20e6, PIN_OUTPUT | MUX_MODE0)   /* dss_data5 */
+			OMAP3_CORE1_IOPAD(0x20e8, PIN_OUTPUT | MUX_MODE0)   /* dss_data6 */
+			OMAP3_CORE1_IOPAD(0x20ea, PIN_OUTPUT | MUX_MODE0)   /* dss_data7 */
+			OMAP3_CORE1_IOPAD(0x20ec, PIN_OUTPUT | MUX_MODE0)   /* dss_data8 */
+			OMAP3_CORE1_IOPAD(0x20ee, PIN_OUTPUT | MUX_MODE0)   /* dss_data9 */
+			OMAP3_CORE1_IOPAD(0x20f0, PIN_OUTPUT | MUX_MODE0)   /* dss_data10 */
+			OMAP3_CORE1_IOPAD(0x20f2, PIN_OUTPUT | MUX_MODE0)   /* dss_data11 */
+			OMAP3_CORE1_IOPAD(0x20f4, PIN_OUTPUT | MUX_MODE0)   /* dss_data12 */
+			OMAP3_CORE1_IOPAD(0x20f6, PIN_OUTPUT | MUX_MODE0)   /* dss_data13 */
+			OMAP3_CORE1_IOPAD(0x20f8, PIN_OUTPUT | MUX_MODE0)   /* dss_data14 */
+			OMAP3_CORE1_IOPAD(0x20fa, PIN_OUTPUT | MUX_MODE0)   /* dss_data15 */
+			OMAP3_CORE1_IOPAD(0x20fc, PIN_OUTPUT | MUX_MODE0)   /* dss_data16 */
+			OMAP3_CORE1_IOPAD(0x20fe, PIN_OUTPUT | MUX_MODE0)   /* dss_data17 */
+			OMAP3_CORE1_IOPAD(0x2100, PIN_OUTPUT | MUX_MODE0)   /* dss_data18 */
+			OMAP3_CORE1_IOPAD(0x2102, PIN_OUTPUT | MUX_MODE0)   /* dss_data19 */
+			OMAP3_CORE1_IOPAD(0x2104, PIN_OUTPUT | MUX_MODE0)   /* dss_data20 */
+			OMAP3_CORE1_IOPAD(0x2106, PIN_OUTPUT | MUX_MODE0)   /* dss_data21 */
+			OMAP3_CORE1_IOPAD(0x2108, PIN_OUTPUT | MUX_MODE0)   /* dss_data22 */
+			OMAP3_CORE1_IOPAD(0x210a, PIN_OUTPUT | MUX_MODE0)   /* dss_data23 */
+		>;
+	};
+
+	mcspi1_pins: mcspi1-pins {
+		pinctrl-single,pins = <
+			OMAP3_CORE1_IOPAD(0x21c8, PIN_INPUT | MUX_MODE0)            /* mcspi1_clk */
+			OMAP3_CORE1_IOPAD(0x21ca, PIN_OUTPUT | MUX_MODE0)           /* mcspi1_simo */
+			OMAP3_CORE1_IOPAD(0x21cc, PIN_INPUT | MUX_MODE0)            /* mcspi1_somi */
+			OMAP3_CORE1_IOPAD(0x21ce, PIN_INPUT_PULLDOWN | MUX_MODE0)   /* mcspi1_cs0 */
+		>;
+	};
+
+	/*
+	 * McSPI2 CS0 = EM357 Thread/ConnectIP radio (spinel NCP over SPI, stock
+	 * /dev/spidev2.0). Pad values copied verbatim from the stock 2.6.37 board
+	 * file (docs/hw/omap_mux.txt, stock-pads dump): clk/somi input mode0,
+	 * simo/cs0 output mode0. CS0 stays MUX_MODE0 = McSPI hardware chipselect
+	 * (the force-bootload trick in /etc/init.d/em357 temporarily flips this same
+	 * pad to MODE4 = gpio181 to hold SS low; normal NCP traffic uses HW CS0).
+	 */
+	mcspi2_pins: mcspi2-pins {
+		pinctrl-single,pins = <
+			OMAP3_CORE1_IOPAD(0x21d6, PIN_INPUT | MUX_MODE0)    /* mcspi2_clk  */
+			OMAP3_CORE1_IOPAD(0x21d8, PIN_OUTPUT | MUX_MODE0)   /* mcspi2_simo */
+			OMAP3_CORE1_IOPAD(0x21da, PIN_INPUT | MUX_MODE0)    /* mcspi2_somi */
+			OMAP3_CORE1_IOPAD(0x21dc, PIN_OUTPUT | MUX_MODE0)   /* mcspi2_cs0 (HW chipselect) */
+		>;
+	};
+};
+
+&vaux2 {
+	regulator-min-microvolt = <2800000>;
+	regulator-max-microvolt = <2800000>;
+};
+
+&dss {
+	pinctrl-names = "default";
+	pinctrl-0 = <&dss_dpi_pins>;
+	status = "okay";
+	vdds_dsi-supply = <&vpll2>;
+
+	port {
+		dpi_out: endpoint {
+			remote-endpoint = <&lcd_in>;
+			data-lines = <24>;
+		};
+	};
+};
+
+&mcspi1 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mcspi1_pins>;
+	status = "okay";
+
+	lcd: panel@0 {
+		compatible = "samsung,s6d05a1";
+		reg = <0>;
+		spi-max-frequency = <10000000>;
+		spi-cpol;
+		spi-cpha;
+		vcc-supply = <&vaux2>;
+		reset-gpios = <&gpio4 13 GPIO_ACTIVE_LOW>;	/* gpio109 LCD #RESET */
+		backlight = <&backlight>;
+		label = "lcd";
+
+		port {
+			lcd_in: endpoint {
+				remote-endpoint = <&dpi_out>;
+			};
+		};
+	};
+};
+
+/*
+ * McSPI2 CS0 = EM357 Thread radio (spinel NCP over SPI). This is the stock
+ * /dev/spidev2.0 (McSPI2 @ 0x4809a000, CS0). The on-chip firmware is Nest
+ * "ConnectIP" (ip-modem-app.bin), already flashed; no radio reflash is needed.
+ *
+ * Driver binding: "silabs,em3581" is on the upstream spidev of_device_id
+ * whitelist (drivers/spi/spidev.c spidev_dt_ids in 6.6.64) -- it is the Silabs
+ * Ember NCP entry, so the spidev driver binds to this node WITHOUT any driver
+ * patch and WITHOUT a manual /sys/bus/spi/drivers/spidev/bind step, giving
+ * /dev/spidev2.0. CONFIG_SPI_SPIDEV=y is set in j49.cfg.
+ *
+ * Chipselect: HW CS0 (mcspi2_cs0 pad MUX_MODE0), matching stock. spi-server
+ * opens /dev/spidev2.0 and sets the real SPI speed/mode via ioctl, so
+ * spi-max-frequency here is only the ceiling. The radio reset(gpio61),
+ * host interrupt(gpio182) and wake lines are driven by spi-server from
+ * userspace via sysfs-exported GPIOs -- they are NOT claimed in this node, and
+ * their pads are muxed as GPIO (MODE4) by nest_core_pins below.
+ */
+&mcspi2 {
+	pinctrl-names = "default";
+	pinctrl-0 = <&mcspi2_pins>;
+	status = "okay";
+
+	radio@0 {
+		compatible = "silabs,em3581";
+		reg = <0>;			/* HW chipselect CS0 */
+		spi-max-frequency = <4000000>;	/* ceiling only; spi-server sets the real rate/mode */
+	};
+};
+
+/*
+ * Backlight: LM3530 on I2C3 at 0x36 in manual I2C mode (stock lm3530-backlight.0:
+ * GEN_CONFIG 0x1d = 29.5 mA full scale, max 0x78, cmdline brightness=108). HWEN is
+ * gpio177 (gpio6 bit 17, stock "lm3530 enable" high) and the chip is powered from
+ * VAUX1: it only answers on the bus with both asserted (USB session 3 / jump 36).
+ * Stock's kexec shutdown leaves gpio177 low, so the driver must raise it itself.
+ */
+&i2c3 {
+	clock-frequency = <100000>;	/* default that the 6.6 USB sessions scanned 0x36 with */
+
+	backlight: backlight@36 {
+		compatible = "ti,lm3530";
+		reg = <0x36>;
+		hwen-gpios = <&gpio6 17 GPIO_ACTIVE_HIGH>;	/* gpio177 */
+		vcc-supply = <&vaux1>;
+		default-brightness = <108>;
+		max-brightness = <120>;
+	};
+};
+
+/*
+ * Ring rotation: Avago ADBS-A330 optical finger-nav sensor on I2C2 at 0x57
+ * (driver patch 0008, compatible "avago,adbs-a330"; reports REL_X/REL_Y on its
+ * MOTION# interrupt). The i2c2 pads are already hogged MODE0 in nest_core_pins,
+ * and MOTION#/RESET#/SHUTDOWN are muxed as GPIO (MODE4) there too, so this node
+ * needs no pinctrl of its own. gpio bank4 base = gpio96.
+ */
+&i2c2 {
+	clock-frequency = <100000>;
+
+	ring: ring-sensor@57 {
+		compatible = "avago,adbs-a330";
+		reg = <0x57>;
+		interrupts-extended = <&gpio4 12 IRQ_TYPE_EDGE_FALLING>;	/* MOTION# gpio108 (cam_d9) */
+		reset-gpios = <&gpio4 14 GPIO_ACTIVE_LOW>;		/* RESET#  gpio110 (cam_d11) */
+		shutdown-gpios = <&gpio4 5 GPIO_ACTIVE_HIGH>;		/* SHUTDOWN gpio101 (cam_d2) */
+		wakeup-source;
+	};
+};
+
+/*
+ * NAND: Micron MT29F2G16ABBEAH4 (256 MiB, 16-bit) on GPMC CS0, stock layout from
+ * board-diamond.c / docs/flash-layout.md. DISABLED until the ECC format is sorted
+ * out: stock 2.6.37 uses OMAP_ECC_BCH4_CODE_HW = raw GPMC BCH4 syndromes (7 B per
+ * 512 B sector, 28 B per page) stored at the END of the 64 B OOB (bytes 36..63),
+ * no constant polynomial. Mainline's "bch4" (BCH4_CODE_HW_DETECTION_SW, no ELM on
+ * OMAP3) puts the 28 B right after the bad-block marker (2..29) and adds the
+ * erased-page polynomial, so it cannot read stock partitions nor write a B slot
+ * the stock U-Boot can boot. Needs a compat ECC variant in omap2.c first.
+ * GPMC timings below are the omap3-beagle (Micron) values, to be replaced by the
+ * live GPMC_CONFIG1..6 of CS0 (0x6e000060..0x74) read from stock.
+ */
+/* cpufreq: OPP50 300 MHz and OPP100 600 MHz are proven on this board (jump 66: VDD1 via the
+ * twl regulator follows, 1.0125 / 1.200 V). OPP130 800 MHz (1.325 V + ABB forward body bias)
+ * kills the CPU silently the moment it is selected (jumps 60/61/66) and ondemand picks the
+ * max OPP under boot load, so keep it out until the ABB/voltage path is understood. */
+&cpu0_opp_table {
+	/* Run OPP50 at the OPP100 voltage. The twl regulator has no ramp_delay, so the OPP
+	 * core raises the DPLL the instant the VSEL write is out while VDD1 is still slewing
+	 * 1.0125 -> 1.2 V; under ondemand's rapid boot-time transitions that races and the CPU
+	 * dies silently (jumps 60/61/67/68). Stock also idles at 300 MHz with VDD1 at 1.2 V. */
+	opp-50-300000000 {
+		opp-microvolt = <1200000 1200000 1200000>,
+				<1200000 1200000 1200000>;
+	};
+	opp-130-800000000 {
+		status = "disabled";
+	};
+};
+
+&gpmc {
+	/* Was "disabled" from the kexec/initramfs era (keep NAND untouched during jumps).
+	 * The NAND B slot boots root1 FROM this controller: every B-slot DTB built from this
+	 * file with GPMC disabled had no /dev/mtd* at all, so root never mounted and the boot
+	 * looked like an early-sysinit stall (2026-11-07/08, b12..b14: timing proof via
+	 * rootdelay panic at ~10 s). The 11-01 nand15 DTB that reached userspace had it okay. */
+	status = "okay";
+	ranges = <0 0 0x30000000 0x1000000>;	/* CS0 space, 16 MB */
+
+	nand@0,0 {
+		compatible = "ti,omap2-nand";
+		reg = <0 0 4>;
+		interrupt-parent = <&gpmc>;
+		interrupts = <0 IRQ_TYPE_NONE>,	/* fifoevent */
+			     <1 IRQ_TYPE_NONE>;	/* termcount */
+		/* bch4 is self-consistent for root1, which the modern kernel owns (writes +
+		 * reads with this same ECC). boot1 is written from stock in stock BCH4 and
+		 * read only by stock u-boot, so no compat-ECC read is needed here. See
+		 * docs/flash-layout.md "NAND B-slot bring-up strategy". */
+		ti,nand-ecc-opt = "bch4";
+		nand-bus-width = <16>;
+		gpmc,device-width = <2>;
+		gpmc,cs-on-ns = <0>;
+		gpmc,cs-rd-off-ns = <36>;
+		gpmc,cs-wr-off-ns = <36>;
+		gpmc,adv-on-ns = <6>;
+		gpmc,adv-rd-off-ns = <24>;
+		gpmc,adv-wr-off-ns = <36>;
+		gpmc,oe-on-ns = <6>;
+		gpmc,oe-off-ns = <48>;
+		gpmc,we-on-ns = <6>;
+		gpmc,we-off-ns = <30>;
+		gpmc,rd-cycle-ns = <72>;
+		gpmc,wr-cycle-ns = <72>;
+		gpmc,access-ns = <54>;
+		gpmc,wr-access-ns = <30>;
+
+		partitions {
+			compatible = "fixed-partitions";
+			#address-cells = <1>;
+			#size-cells = <1>;
+
+			ipl@0            { label = "ipl";           reg = <0x00000000 0x00040000>; read-only; };
+			spl0@40000       { label = "spl0";          reg = <0x00040000 0x00180000>; read-only; };
+			spl1@1c0000      { label = "spl1";          reg = <0x001c0000 0x00180000>; read-only; };
+			env0@340000      { label = "env0";          reg = <0x00340000 0x00060000>; };
+			env1@3a0000      { label = "env1";          reg = <0x003a0000 0x00060000>; };
+			boot0@400000     { label = "boot0";         reg = <0x00400000 0x00800000>; read-only; };
+			root0@c00000     { label = "root0";         reg = <0x00c00000 0x02e00000>; read-only; };
+			/* boot1 is 8 MB in the stock layout; the modern uImage is ~4.7 MB, so its tail
+			 * (last 3 MB, see oops@3f00000 below) is lent to mtdoops as a hands-free kernel
+			 * post-mortem channel. Stock u-boot only reads the uImage size from 0x3a00000. */
+			boot1@3a00000    { label = "boot1";         reg = <0x03a00000 0x00500000>; };
+			root1@4200000    { label = "root1";         reg = <0x04200000 0x02e00000>; };
+			sysconf@7000000  { label = "system-config"; reg = <0x07000000 0x00400000>; };
+			userconf@7400000 { label = "user-config";   reg = <0x07400000 0x00800000>; };
+			data@7c00000     { label = "data";          reg = <0x07c00000 0x01400000>; };
+			log@9000000      { label = "log";           reg = <0x09000000 0x01400000>; };
+			scratch@a400000  { label = "scratch";       reg = <0x0a400000 0x05c00000>; };
+			/* Appended LAST so the numbering above (root1 = mtd8, CONFIG_CMDLINE) is unchanged:
+			 * mtdoops.mtddev=oops -> kernel panic/oops kmsg records (bring-up; raw-readable from
+			 * stock with nanddump -n on the 8 MB stock boot1 partition at offset 5 MB). */
+			oops@3f00000     { label = "oops";          reg = <0x03f00000 0x00300000>; };
+		};
+	};
+};
+
+/*
+ * Pads the stock 2.6.37 board file muxes for the peripherals we drive and that stock u-boot
+ * leaves at reset defaults (register values read from stock's /sys/kernel/debug/omap_mux,
+ * 2026-11-07). Without them a cold NAND boot had no WLAN (gpio103 WLAN_EN still a camera pad ->
+ * "mmc1: Failed to initialize a non-removable card") and no backlight (i2c3 pads + gpio177 HWEN
+ * unmuxed -> "omap_i2c 48060000.i2c: controller timed out"); the kexec jumps inherited stock's
+ * mux and worked. Hogged on the pinmux controllers so the pads are set before any driver probes.
+ */
+&omap3_pmx_core {
+	pinctrl-names = "default";
+	pinctrl-0 = <&nest_core_pins>;
+
+	nest_core_pins: nest-core-pins {
+		pinctrl-single,pins = <
+			0x00ec 0x771c	/* cam_d3  -> gpio_102  WL127x IRQ (input pullup, wakeup) */
+			0x00ee 0x3604	/* cam_d4  -> gpio_103  WLAN_EN / "vmmc2" (output) */
+			0x00f2 0x371c	/* cam_d6  -> gpio_105  s6d05a1 lcd_id (input pullup) */
+			0x00fa 0x1604	/* cam_d10 -> gpio_109  s6d05a1 reset (output) */
+			0x00fc 0x0004	/* cam_d11 -> gpio_110  ADBS A330 reset# (output) */
+			0x00f8 0x4104	/* cam_d9  -> gpio_108  ADBS A330 motion# (input, OFF_WAKEUPEN, mode4) */
+			0x00ea 0x0004	/* cam_d2  -> gpio_101  ADBS A330 shutdown  (output, mode4) */
+			0x008c 0x0003	/* gpmc_ncs7 -> gpt8_pwm_evt  PIEZO beeper (output, mode3) */
+			0x0128 0x0118	/* sdmmc2_clk  (input pullup, mode0) */
+			0x012a 0x0118	/* sdmmc2_cmd */
+			0x012c 0x0118	/* sdmmc2_dat0 */
+			0x012e 0x0118	/* sdmmc2_dat1 */
+			0x0130 0x0118	/* sdmmc2_dat2 */
+			0x0132 0x0118	/* sdmmc2_dat3 */
+			0x018e 0x0100	/* i2c2_scl (input, mode0) */
+			0x0190 0x0100	/* i2c2_sda */
+			0x0192 0x0100	/* i2c3_scl */
+			0x0194 0x0100	/* i2c3_sda */
+			0x014c 0x0000	/* uart1_tx (output, mode0) -- physical debug UART (ttyS0), same as stock u-boot/ttyO0 */
+			0x0152 0x0118	/* uart1_rx (input pullup, mode0) -- debug UART RX; stock also muxes these dedicated pads */
+			0x01a4 0x0204	/* mcspi1_cs3 -> gpio_177  lm3530 HWEN (output) */
+			/* EM357 Thread radio control lines, muxed as GPIO (MODE4) only --
+			 * NOT requested by any kernel driver, so spi-server can sysfs-export
+			 * them. Values copied verbatim from the stock board file / pad dump. */
+			0x0098 0x0204	/* gpmc_nbe1  -> gpio_61   ZigBee Reset#   (output, mode4) */
+			0x01ae 0x3704	/* mcspi2_cs1 -> gpio_182  ZigBee Interrupt (input pullup, wakeup, mode4) */
+		>;
+	};
+};
+
+&omap3_pmx_wkup {
+	pinctrl-names = "default";
+	pinctrl-0 = <&nest_wkup_pins>;
+
+	nest_wkup_pins: nest-wkup-pins {
+		pinctrl-single,pins = <
+			0x001a 0x0018	/* sys_clkout1 (output, mode0): 19.2 MHz to TWL HFCLKIN / WL1271 ref */
+		>;
+	};
+};
+
+/*
+ * Piezo click beeper: head-unit OMAP GPT8 PWM on gpmc_ncs7 (ball g4, pad hogged
+ * MODE3 = gpt8_pwm_evt in nest_core_pins above). Stock drives a 2000 Hz / 3 ms
+ * click as EV_SND/SND_TONE to a pwm-beeper; userspace emits it per ring detent.
+ * timer8 is free on this board (clockevent/source use timer1). Root-node adds
+ * merge into the tree.
+ */
+&{/} {
+	beeper: pwm-beeper {
+		compatible = "pwm-beeper";
+		pwms = <&piezo_pwm 0 500000 0>;	/* period 500000 ns = 2 kHz default; driver sets tone */
+	};
+
+	piezo_pwm: pwm-8 {
+		compatible = "ti,omap-dmtimer-pwm";
+		ti,timers = <&timer8>;
+		#pwm-cells = <3>;
+		ti,clock-source = <0x01>;	/* 32 kHz source, enough for click tones */
+	};
+};
+
+/*
+ * UART3 is the link to the backplate. Give it the RX pad as a wake interrupt, so backplate
+ * traffic (a sensor event after 0xa1/0xa4, or the plain 1 Hz stream) wakes a suspended head
+ * unit. Without this the UART interrupt is masked during suspend: measured 2026-11-25, 60 s of
+ * 1 Hz backplate frames did not wake the board, only the RTC alarm did. The pad itself keeps
+ * the bootloader mux (uart3_rx_irrx, 0x219e = 0x0100, input mode 0).
+ */
+&uart3 {
+	interrupts-extended = <&intc 74 &omap3_pmx_core OMAP3_UART3_RX>;
+};

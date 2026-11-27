@@ -1,0 +1,14 @@
+[package]
+name = "j49-sleep"
+version = "0.1.0"
+edition = "2021"
+description = "Decides when the J49 head unit may suspend: backplate quiet, wake-on-WLAN, suspend, wake reason"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

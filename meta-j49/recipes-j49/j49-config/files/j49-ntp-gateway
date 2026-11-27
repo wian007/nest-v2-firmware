@@ -1,0 +1,17 @@
+#!/bin/sh
+# j49-ntp-gateway: use the router of the network we are on as the time server.
+# Home routers usually answer NTP but do not say so over DHCP, and the image has no public
+# servers (10-j49-local-ntp.conf). Waits for a default route, writes the address to a drop-in in
+# /run and has systemd-timesyncd read it. Runs once at boot.
+i=0
+while [ $i -lt 120 ]; do
+    GW=$(ip -4 route show default 2>/dev/null | awk '/default/ {print $3; exit}')
+    [ -n "$GW" ] && break
+    sleep 2; i=$((i + 1))
+done
+[ -n "$GW" ] || { echo "no default route: no time server set"; exit 0; }
+D=/run/systemd/timesyncd.conf.d
+mkdir -p $D
+printf '[Time]\nNTP=%s\n' "$GW" > $D/20-j49-gateway.conf
+echo "time server: $GW"
+systemctl try-restart systemd-timesyncd

@@ -1,0 +1,14 @@
+[package]
+name = "j49-web"
+version = "0.1.0"
+edition = "2021"
+description = "Web page for the J49 thermostat: temperature, away, schedule and broker settings, login confirmed on the device"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

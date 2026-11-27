@@ -1,0 +1,60 @@
+--- a/arch/arm/mach-omap2/omap3/board.c
++++ b/arch/arm/mach-omap2/omap3/board.c
+@@ -213,9 +213,57 @@
+ #endif
+ 
+ #ifdef CONFIG_SPL_BUILD
++
++#ifdef NEST_SPL_ENV_ERASE
++#include <linux/mtd/omap_gpmc.h>
++/*
++ * Nest J49 NAND B-slot recovery (first-light 2026-11-01). This dedicated,
++ * USB-DFU-booted recovery SPL erases the two u-boot env partitions
++ * (env0+env1, abs 0x340000..0x400000 = 6 x 128 KiB blocks, 26..31) and warm-
++ * resets. Stock u-boot then finds an empty env and uses its built-in default,
++ * which is A-first (confirmed in the stock u-boot binary), so it boots stock A.
++ * Erase needs no ECC. HARD-BOUNDED to the env blocks -> boot0 (0x400000)/root0
++ * can never be touched. Run BEFORE omap3_mem_init() so a DDR problem cannot
++ * block the recovery; only clocks (early_system_init) and GPMC are needed.
++ */
++static void nest_env_erase_and_reset(void)
++{
++	u32 blk;
++
++	gpmc_init();	/* configure GPMC CS0 for NAND (write-enable in GPMC_CONFIG) */
++
++	/* Reset the NAND first: after the ROM's boot reads it may be mid-operation
++	 * and would ignore a bare erase sequence. 0xFF = RESET, then wait ready. */
++	writeb(0xff, &gpmc_cfg->cs[0].nand_cmd);
++	{ int i; for (i = 0; i < 4000000; i++) {
++		writeb(0x70, &gpmc_cfg->cs[0].nand_cmd);
++		if (readb(&gpmc_cfg->cs[0].nand_dat) & 0x40) break; } }
++
++	for (blk = 26; blk <= 31; blk++) {
++		u32 page = blk * 64;		/* 64 pages per 128 KiB block */
++		int i;
++		writeb(0x60, &gpmc_cfg->cs[0].nand_cmd);		/* ERASE setup */
++		writeb(page & 0xff, &gpmc_cfg->cs[0].nand_adr);		/* 3 row-addr */
++		writeb((page >> 8) & 0xff, &gpmc_cfg->cs[0].nand_adr);
++		writeb((page >> 16) & 0xff, &gpmc_cfg->cs[0].nand_adr);
++		writeb(0xd0, &gpmc_cfg->cs[0].nand_cmd);		/* ERASE confirm */
++		writeb(0x70, &gpmc_cfg->cs[0].nand_cmd);		/* READ STATUS */
++		for (i = 0; i < 4000000; i++)
++			if (readb(&gpmc_cfg->cs[0].nand_dat) & 0x40)	/* ready */
++				break;
++	}
++	writel(readl((void *)0x48307250) | 0x2, (void *)0x48307250); /* PRM warm reset */
++	for (;;)
++		;
++}
++#endif
++
+ void board_init_f(ulong dummy)
+ {
+ 	early_system_init();
++#ifdef NEST_SPL_ENV_ERASE
++	nest_env_erase_and_reset();	/* never returns: recovery MLO only */
++#endif
+ 	omap3_mem_init();
+ 	/*
+ 	* Save the boot parameters passed from romcode.

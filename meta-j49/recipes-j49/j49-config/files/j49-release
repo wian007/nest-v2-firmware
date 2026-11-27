@@ -1,0 +1,14 @@
+#!/bin/sh
+# j49-release: what is running. /etc/j49-release says which commit the root filesystem was built
+# from; the rest is read live, because the kernel (boot0) and the active root slot are installed
+# separately from the root filesystem.
+cat /etc/j49-release 2>/dev/null || echo "commit=unknown (no /etc/j49-release)"
+r=$(tr ' ' '\n' < /proc/cmdline | sed -n 's/^root=//p' | tail -n 1)
+case "$r" in
+    /dev/mtdblock6) s=a ;;
+    /dev/mtdblock8) s=b ;;
+    *) s=unknown ;;
+esac
+echo "slot=$s"
+echo "root=$r"
+echo "kernel=$(uname -r) $(uname -v)"

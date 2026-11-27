@@ -1,0 +1,48 @@
+--- a/drivers/usb/musb-new/omap2430.c
++++ b/drivers/usb/musb-new/omap2430.c
+@@ -1,3 +1,4 @@
++#include <nest_ping.h>
+ // SPDX-License-Identifier: GPL-2.0
+ /*
+  * Copyright (C) 2005-2007 by Texas Instruments
+@@ -66,6 +67,7 @@
+ 	struct omap_musb_board_data *data =
+ 		(struct omap_musb_board_data *)musb->controller;
+ 
++	{ nest_ping(); nest_ping(); nest_ping(); nest_ping(); }
+ 	/* Reset the controller */
+ 	musb_writel(musb->mregs, OTG_SYSCONFIG, SOFTRST);
+ 
+@@ -82,6 +84,7 @@
+ 		}
+ 	}
+ 
++	{ nest_ping(); nest_ping(); nest_ping(); nest_ping(); }
+ 	l = musb_readl(musb->mregs, OTG_INTERFSEL);
+ 
+ 	if (data->interface_type == MUSB_INTERFACE_UTMI) {
+--- a/drivers/usb/musb-new/musb_gadget.c
++++ b/drivers/usb/musb-new/musb_gadget.c
+@@ -1,3 +1,4 @@
++#include <nest_ping.h>
+ // SPDX-License-Identifier: GPL-2.0
+ /*
+  * MUSB OTG driver peripheral support
+@@ -1995,6 +1996,7 @@
+ 	dev_dbg(musb->controller, "registering driver %s\n", driver->function);
+ #endif
+ 
++	{ nest_ping(); nest_ping(); nest_ping(); nest_ping(); }
+ 	musb->softconnect = 0;
+ 	musb->gadget_driver = driver;
+ 
+@@ -2014,7 +2016,9 @@
+ 
+ 	if (!is_otg_enabled(musb))
+ #endif
++	{ nest_ping(); nest_ping(); nest_ping(); nest_ping(); }
+ 		musb_start(musb);
++	{ nest_ping(); nest_ping(); nest_ping(); nest_ping(); }
+ 
+ 	spin_unlock_irqrestore(&musb->lock, flags);
+ 

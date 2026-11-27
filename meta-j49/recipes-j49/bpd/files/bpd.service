@@ -1,0 +1,16 @@
+[Unit]
+Description=Nest backplate daemon: sensor handshake, watchdog keepalive, sensor stream (bpd)
+# UART3 to the backplate STM32; without the periodic 0xa1 frame the backplate
+# cold-resets the head unit after ~29 minutes.
+After=dev-ttyS2.device
+BindsTo=dev-ttyS2.device
+DefaultDependencies=no
+Before=sysinit.target
+
+[Service]
+ExecStart=/usr/bin/bpd sensors /dev/ttyS2
+Restart=always
+RestartSec=2
+
+[Install]
+WantedBy=sysinit.target

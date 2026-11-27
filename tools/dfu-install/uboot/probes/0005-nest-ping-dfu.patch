@@ -1,0 +1,106 @@
+--- a/common/dfu.c
++++ b/common/dfu.c
+@@ -20,6 +20,7 @@
+ #include <usb.h>
+ #include <net.h>
+ #include <linux/printk.h>
++#include <nest_ping.h>
+ 
+ int run_usb_dnl_gadget(int usbctrl_index, char *usb_dnl_gadget)
+ {
+@@ -27,13 +28,17 @@
+ 	struct udevice *udc;
+ 	int ret, i = 0;
+ 
++	nest_ping();
+ 	ret = udc_device_get_by_index(usbctrl_index, &udc);
++	nest_ping();
+ 	if (ret) {
+ 		pr_err("udc_device_get_by_index failed\n");
+ 		return CMD_RET_FAILURE;
+ 	}
+ 	g_dnl_clear_detach();
++	nest_ping();
+ 	ret = g_dnl_register(usb_dnl_gadget);
++	nest_ping();
+ 	if (ret) {
+ 		pr_err("g_dnl_register failed");
+ 		ret = CMD_RET_FAILURE;
+@@ -105,6 +110,7 @@
+ 			goto exit;
+ 
+ 		schedule();
++		nest_ping();
+ 		dm_usb_gadget_handle_interrupts(udc);
+ 	}
+ exit:
+@@ -116,6 +122,7 @@
+ 		do_reset(NULL, 0, 0, NULL);
+ 
+ 	g_dnl_clear_detach();
++	nest_ping();
+ 
+ 	return ret;
+ }
+--- a/cmd/dfu.c
++++ b/cmd/dfu.c
+@@ -18,6 +18,7 @@
+ #include <g_dnl.h>
+ #include <usb.h>
+ #include <net.h>
++#include <nest_ping.h>
+ 
+ static int do_dfu(struct cmd_tbl *cmdtp, int flag, int argc, char *const argv[])
+ {
+@@ -48,7 +49,9 @@
+ 	if (!strcmp(argv[1], "tftp"))
+ 		return update_tftp(value, interface, devstring);
+ #endif
++	nest_ping();
+ 	ret = dfu_init_env_entities(interface, devstring);
++	nest_ping();
+ 	if (ret)
+ 		goto done;
+ 
+--- /dev/null
++++ b/include/nest_ping.h
+@@ -0,0 +1,39 @@
++#ifndef NEST_PING_H
++#define NEST_PING_H
++#ifndef NEST_WD
++#define NEST_WD ((volatile unsigned int *)0x48314000)
++static inline void nest_wd_wait(unsigned int bit)
++{
++	int i;
++
++	for (i = 0; i < 200000 && (NEST_WD[0x34 / 4] & bit); i++)
++		;
++}
++
++static inline void nest_ping(void)
++{
++	volatile unsigned int *t = (volatile unsigned int *)0x48320010;
++	volatile unsigned int *cmf = (volatile unsigned int *)0x48004c00;
++	volatile unsigned int *cmi = (volatile unsigned int *)0x48004c10;
++	unsigned int t0 = *t;
++
++	while ((*t - t0) < 16384)
++		;
++	*cmf |= 0x20;			/* EN_WDT2 fclk + iclk */
++	*cmi |= 0x20;
++	NEST_WD[0x48 / 4] = 0xaaaa;	/* disable */
++	nest_wd_wait(0x10);
++	NEST_WD[0x48 / 4] = 0x5555;
++	nest_wd_wait(0x10);
++	NEST_WD[0x2c / 4] = 0xfff60000;	/* WLDR: 0xa0000 ticks = 20 s */
++	nest_wd_wait(0x04);
++	NEST_WD[0x30 / 4] = NEST_WD[0x30 / 4] + 1; /* WTGR: reload */
++	nest_wd_wait(0x08);
++	NEST_WD[0x48 / 4] = 0xbbbb;	/* enable */
++	nest_wd_wait(0x10);
++	NEST_WD[0x48 / 4] = 0x4444;
++	nest_wd_wait(0x10);
++}
++
++#endif
++#endif

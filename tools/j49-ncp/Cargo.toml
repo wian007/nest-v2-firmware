@@ -1,0 +1,14 @@
+[package]
+name = "j49-ncp"
+version = "0.1.0"
+edition = "2021"
+description = "Read-only access to the EM357 radio through Nest's SPI bootloader (version, CRC, flash dump)"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

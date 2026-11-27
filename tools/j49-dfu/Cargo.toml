@@ -1,0 +1,14 @@
+[package]
+name = "j49-dfu"
+version = "0.1.0"
+edition = "2021"
+description = "Reboot the Nest into the U-Boot DFU window (or the USB-ACM console) from Linux"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

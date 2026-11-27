@@ -1,0 +1,39 @@
+mfd: twl-core: keep the HFCLKIN reference clock enabled
+
+clocks_init() only looked up the "fck" clock to read its rate and dropped it
+again, so nothing holds a reference on the PMIC's HFCLKIN source. On the Nest
+J49 (OMAP3630 + TPS65921) that source is sys_clkout1; clk_disable_unused()
+gates it at late_initcall and the PMIC disappears from I2C1 (NACK, arbitration
+lost, SCL stuck low), taking USB VBUS detection, the regulators and the RTC with
+it. Take the clock with devm_clk_get_enabled() instead so a DT
+'clocks = <&sys_clkout1>; clock-names = "fck"' on the twl node keeps it alive.
+
+Upstream-Status: Pending
+Signed-off-by: J49 project <j49@users.noreply.github.com>
+
+diff -Nur a/drivers/mfd/twl-core.c b/drivers/mfd/twl-core.c
+--- a/drivers/mfd/twl-core.c	2026-10-31 16:38:35.711870710 +0100
++++ b/drivers/mfd/twl-core.c	2026-10-31 16:38:35.756143746 +0100
+@@ -629,7 +629,13 @@
+ 	u32 rate;
+ 	u8 ctrl = HFCLK_FREQ_26_MHZ;
+ 
+-	osc = clk_get(dev, "fck");
++	/*
++	 * Keep the HFCLKIN reference running for as long as the PMIC is bound:
++	 * on boards where it comes from an SoC clock output (e.g. OMAP3
++	 * sys_clkout1) clk_disable_unused() would otherwise gate it and take
++	 * the PMIC off the I2C bus (NACKs, SCL stuck low, lost regulators).
++	 */
++	osc = devm_clk_get_enabled(dev, "fck");
+ 	if (IS_ERR(osc)) {
+ 		printk(KERN_WARNING "Skipping twl internal clock init and "
+ 				"using bootloader value (unknown osc rate)\n");
+@@ -637,7 +643,6 @@
+ 	}
+ 
+ 	rate = clk_get_rate(osc);
+-	clk_put(osc);
+ 
+ 	switch (rate) {
+ 	case 19200000:

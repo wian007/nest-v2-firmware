@@ -1,0 +1,50 @@
+diff -uNr a/cmd/Makefile b/cmd/Makefile
+--- a/cmd/Makefile	2026-11-22 23:58:15.516953308 +0100
++++ b/cmd/Makefile	2026-11-22 23:58:15.518894488 +0100
+@@ -289,3 +289,4 @@
+ 	$(call filechk,data_size)
+ 
+ CFLAGS_ethsw.o := -Wno-enum-conversion
++obj-y += nest_jumpz.o
+diff -uNr a/cmd/nest_jumpz.c b/cmd/nest_jumpz.c
+--- a/cmd/nest_jumpz.c	1970-01-01 01:00:00.000000000 +0100
++++ b/cmd/nest_jumpz.c	2026-11-22 23:58:15.519831321 +0100
+@@ -0,0 +1,38 @@
++// SPDX-License-Identifier: GPL-2.0+
++/*
++ * jumpz <addr> [r1 [r2]] -- debug helper for the Nest J49: cache cleanup like
++ * a normal Linux boot, then jump to <addr> with r0=0, r1=<machine id>
++ * (default 0xff2), r2=<atags/dtb> (default 0 = none). Bypasses bootz so the
++ * handoff registers can be chosen by hand from the USB-ACM console.
++ */
++#include <command.h>
++#include <vsprintf.h>
++#include <irq_func.h>
++#include <cpu_func.h>
++
++extern int cleanup_before_linux(void);
++
++static int do_jumpz(struct cmd_tbl *cmdtp, int flag, int argc,
++		    char *const argv[])
++{
++	ulong addr, r1 = 0xff2, r2 = 0;
++	void (*kernel)(int, ulong, ulong);
++
++	if (argc < 2)
++		return CMD_RET_USAGE;
++	addr = hextoul(argv[1], NULL);
++	if (argc > 2)
++		r1 = hextoul(argv[2], NULL);
++	if (argc > 3)
++		r2 = hextoul(argv[3], NULL);
++	kernel = (void *)addr;
++
++	disable_interrupts();
++	cleanup_before_linux();
++	kernel(0, r1, r2);
++	return 0;
++}
++
++U_BOOT_CMD(jumpz, 4, 0, do_jumpz,
++	   "jump to a zImage with chosen r1/r2 (debug)",
++	   "<addr> [r1 [r2]]  - cleanup caches, then jump with r0=0");

@@ -1,0 +1,10 @@
+[Unit]
+Description=kexec test session guard (health to kmsg, warm reboot to stock after the hold)
+After=basic.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/nest-session.sh
+
+[Install]
+WantedBy=multi-user.target

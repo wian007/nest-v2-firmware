@@ -1,0 +1,50 @@
+--- a/drivers/usb/gadget/g_dnl.c
++++ b/drivers/usb/gadget/g_dnl.c
+@@ -1,3 +1,4 @@
++#include <nest_ping.h>
+ // SPDX-License-Identifier: GPL-2.0+
+ /*
+  * g_dnl.c -- USB Downloader Gadget
+@@ -233,6 +234,7 @@
+ 
+ 	debug("%s: gadget: 0x%p cdev: 0x%p\n", __func__, gadget, cdev);
+ 
++	nest_ping();
+ 	id = usb_string_id(cdev);
+ 
+ 	if (id < 0)
+@@ -258,7 +260,9 @@
+ 		device_desc.iSerialNumber = id;
+ 	}
+ 
++	nest_ping();
+ 	ret = g_dnl_config_register(cdev);
++	nest_ping();
+ 	if (ret)
+ 		goto error;
+ 
+@@ -274,6 +278,7 @@
+ 	debug("%s: calling usb_gadget_connect for "
+ 			"controller '%s'\n", __func__, gadget->name);
+ 	usb_gadget_connect(gadget);
++	nest_ping();
+ 
+ 	return 0;
+ 
+--- a/drivers/usb/gadget/composite.c
++++ b/drivers/usb/gadget/composite.c
+@@ -1,3 +1,4 @@
++#include <nest_ping.h>
+ // SPDX-License-Identifier: GPL-2.0+
+ /*
+  * composite.c - infrastructure for Composite USB Gadgets
+@@ -1508,7 +1509,9 @@
+ 		driver->name = "composite";
+ 	composite = driver;
+ 
++	nest_ping();
+ 	res = usb_gadget_register_driver(&composite_driver);
++	nest_ping();
+ 	if (res != 0)
+ 		composite = NULL;
+ 

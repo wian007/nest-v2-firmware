@@ -1,0 +1,41 @@
+OMAP3 ROM USB peripheral-boot ASIC ID (Nest J49 "diamond")
+Captured 2026-10-26 via tools/omap-usbboot (GET_ID 0xF0030003) while the device
+was in USB peripheral boot (0451:d00e). Proves the DFU/USB-boot route works and
+that we can talk to the mask-ROM without sudo (NixOS uaccess udev rule).
+
+Raw (69 bytes):
+05 01 05 01 36 30 07 07 13 02 01 00 12 15 01 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 00 00 00 14 15 01 00 00 00 00 00 00 00 00 00 00 00 00 00 00
+00 00 00 00 00 00 15 09 01 13 bf 3e ef 00 00 00 00
+
+Structure (num_subblocks=5):
+  sub id=0x01 size=0x05 data=01 36 30 07 07   (ID subblock)
+  sub id=0x13 size=0x02 data=01 00
+  sub id=0x12 size=0x15 data=01 00...          (reserved, zeros)
+  sub id=0x14 size=0x15 data=01 00...          (reserved, zeros)
+  sub id=0x15 size=0x09 data=01 13 bf 3e ef 00 00 00 00  (CRC subblock)
+
+Device type: GP (General Purpose) — confirmed independently by x-loader string
+"TI OMAP SPL With GP CH". GP => ROM accepts unsigned images over USB boot.
+(The helper's "device-type=TST" label is a parse heuristic artifact: 0x01 is a
+subblock id, not the device type.)
+
+Exact SoC marketing variant (AM3703 vs DM3730) is best read later from
+CONTROL_IDCODE once we can run code; OMAP3 GP is sufficient for bring-up.
+
+--- Live register reads via pushed static ARM devmem (2026-10-26) ---
+CONTROL_IDCODE (0x4830A204) = 0x2B89102F
+  -> VERSION=0x2 (ES1.2), HAWKEYE=0xB891 (OMAP36xx / DM37xx-AM37xx family),
+     MANUFACTURER=0x017 (TI). Confirms OMAP36xx-class, NOT the older OMAP3530.
+     (DM3730 vs AM3703 differ only by SGX/DSP presence; same omap3 BSP base.)
+CONTROL.STATUS (0x480022F0) = 0x0000032F  (SYS_BOOT[5:0]=0x2F; boot-order decode
+     needs the OMAP36xx TRM SYS_BOOT table. USB peripheral boot empirically works.)
+DIE_ID0 (0x4830A218) = 0x01018012
+PROD_ID (0x4830A208) = 0x00000000
+
+Notes:
+- /tmp is mounted noexec; run pushed binaries from /media/scratch (jffs2, exec ok).
+- dropbear has no sftp-server: push files with `ssh root@host "cat > file"`, not scp.
+- Device suspends to RAM via the userspace daemon `nlsleepd` (echo mem >
+  /sys/power/state); no kernel wake_lock. Pause it (`kill -STOP nlsleepd`) to keep
+  a stable SSH shell; `kill -CONT` or reboot restores normal sleep.
