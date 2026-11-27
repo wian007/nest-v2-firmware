@@ -22,9 +22,15 @@ ok=45c16b
 error=e5484d
 # the room temperature
 info=3dbdc9
-# the large word on the start screen (8 characters at most)
-splash=J49
-# the look of large digits: 0 blocks, 1 dots, 2 smoothed, 3 seven-segment, 4 thin strokes
-font=2
+# the word on the start screen (8 characters at most). Which start screen is shown (name,
+# flame or none) is a setting, not part of the theme: splash= in /var/lib/j49/ui.
+splash_text=J49
+# the font of the screen: a file in fonts/. 5x7 dot fonts (.font): default, plain, matrix,
+# fixed. Smooth fonts (.sfont): roboto, inter, noto. Or your own; see docs/thermostat.md.
+font=default
+# how large text is drawn from that font: blocks, dots, smooth, segments or thin
+digits=smooth
+# the font of the web page: a CSS font-family list (fonts the browser has; nothing is downloaded)
+web_font=system-ui, -apple-system, "Segoe UI", sans-serif
 # thickness of the dial in pixels
 dial=14

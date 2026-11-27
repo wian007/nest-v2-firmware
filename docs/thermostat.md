@@ -118,7 +118,8 @@ changes it.
 
 ### Languages, locale and themes
 
-`/var/lib/j49/ui` holds the choice, shared with the web page: `lang=<code>` and `theme=<name>`.
+`/var/lib/j49/ui` holds the choice, shared with the web page: `lang=<code>`, `theme=<name>` and
+`splash=<style>`.
 Both can be changed under Settings on the device.
 
 - **Languages:** one file per language with every text, `tools/lang/<code>.txt` (`key=text`
@@ -128,11 +129,32 @@ Both can be changed under Settings on the device.
   shown in English. The same file says how the language writes things (`locale.*`): the decimal
   sign, a 24 or 12 hour clock, Celsius or Fahrenheit for what is shown (the control itself always
   works in Celsius), the names of days and months.
-- **Start screen:** at start the screen shows the name, a ring that closes and the version for
-  2.5 s (a touch of the ring skips it). The large word is `splash=` in the theme.
-- **Themes:** one file per theme, `tools/themes/<name>.theme`: the colours as `RRGGBB`, the look of
-  large digits (`font` 0 blocks, 1 dots, 2 smoothed, 3 seven-segment, 4 thin strokes) and the
-  thickness of the dial. `default`, `home-assistant` and `light` are there. Your own go in
+- **Start screen:** at start the screen shows a start screen for 2.5 s (a touch of the ring
+  skips it). Which one is a setting, `splash=` in `/var/lib/j49/ui`, chosen on the web page
+  under "Device": `name` (the name, a ring that closes and the version), `flame`, or `none`. It follows the colours of the theme; the word on it is `splash_text=` in the theme.
+- **Themes:** one file per theme, `tools/themes/<name>.theme`: the colours as `RRGGBB`, the
+  fonts, and the thickness of the dial.
+- **Fonts** are part of the theme. `font=<name>` names a font file for the screen,
+  `tools/themes/fonts/<name>.font`: text, per glyph a line `glyph <character>` and seven rows of
+  five `#` or `.`. `default.font` holds every glyph of the built-in font (`j49-screen
+  --dump-font` writes it); `plain.font` changes three digits. `matrix.font` is Matrix Sans, a
+  dot-matrix design after LED and LCD displays (capitals, digits, signs); `fixed.font` is the
+  5x7 terminal font of the X Window System, smaller, with lower case and accented letters.
+  `import-font.py` in that directory turns a BDF font, glyphs in C source or a FontForge
+  dot font into a font file; `LICENSES.md` says where each font comes from. `J49_FONT=<name>`
+  tries a font with any theme on a PC.
+- **Smooth fonts.** A font can also be a `<name>.sfont` file: a normal typeface (Roboto, Inter
+  and Noto Sans are there) drawn beforehand at the six text sizes of the screen, with smooth
+  edges and a width per letter. `make-sans.py <font.ttf> <name>.sfont` makes one from any
+  TrueType or OpenType font (it needs Python with Pillow); mind the licence of the font.
+  `font=roboto` in a theme uses it; the two Home Assistant themes do. `digits=` has no effect
+  on a smooth font. They are files only (about 200 kB each), not built into the program: where
+  the file is missing, the built-in font is used. On a PC: `J49_DATA=<the tools directory>`. A font of your own only has to
+  hold the glyphs it changes, and it can add characters the built-in font lacks (accented
+  letters, lower case) for a language that needs them. `digits=` says how large text is drawn
+  from the font: `blocks`, `dots`, `smooth`, `segments` or `thin`. `web_font=` is the font of
+  the web page, a CSS font-family list (fonts the browser has; nothing is downloaded). Your own
+  font files go in `/var/lib/j49/themes/fonts/`. `default`, `home-assistant`, `home-assistant-light` and `light` are there. Your own go in
   `/var/lib/j49/themes/`; a theme only has to name what differs from the default.
 
 The web page uses the same files: its texts are the `web.*` keys, its colours come from the

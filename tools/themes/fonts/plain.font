@@ -1,0 +1,29 @@
+// "plain": the built-in font with a zero without the slash and plainer 1 and 7.
+// A font file only has to hold the glyphs it changes; see default.font for all of them.
+
+glyph 0
+.###.
+#...#
+#...#
+#...#
+#...#
+#...#
+.###.
+
+glyph 1
+..#..
+.##..
+..#..
+..#..
+..#..
+..#..
+..#..
+
+glyph 7
+#####
+....#
+...#.
+..#..
+..#..
+..#..
+..#..

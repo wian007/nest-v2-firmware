@@ -17,6 +17,7 @@ SRC_URI = "file://j49-web/Cargo.toml \
            file://lang/nl.txt \
            file://themes/default.theme \
            file://themes/home-assistant.theme \
+           file://themes/home-assistant-light.theme \
            file://themes/light.theme \
            file://j49-web.service \
            "

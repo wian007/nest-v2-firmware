@@ -53,8 +53,11 @@ export async function romBoot(dev, files, jump, { log = () => {}, progress = () 
   let done = 0;
   const count = name => n => { done += n; progress(done, total, name); };
 
-  const id = await read(512, 5000);
-  if (!id) throw new Error("the boot ROM did not answer");
+  // A thermostat that hangs in its boot mode stays on the bus but answers nothing: the first
+  // read then fails or gets nothing. Seen with an empty battery and after the ROM gave up.
+  let id = null;
+  try { id = await read(512, 5000); } catch (e) { id = null; }
+  if (!id) { const e = new Error("the boot ROM does not answer"); e.code = "stale"; throw e; }
   if (id.length !== ASIC_ID_LEN) throw new Error("unexpected answer from the boot ROM (" + id.length + " bytes)");
   log("boot ROM: " + Array.from(id.subarray(1, 8), b => b.toString(16).padStart(2, "0")).join(""));
 

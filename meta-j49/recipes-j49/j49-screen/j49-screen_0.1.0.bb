@@ -19,7 +19,15 @@ SRC_URI = "file://j49-screen/Cargo.toml \
            file://lang/nl.txt \
            file://themes/default.theme \
            file://themes/home-assistant.theme \
+           file://themes/home-assistant-light.theme \
            file://themes/light.theme \
+           file://themes/fonts/default.font \
+           file://themes/fonts/plain.font \
+           file://themes/fonts/fixed.font \
+           file://themes/fonts/matrix.font \
+           file://themes/fonts/roboto.sfont \
+           file://themes/fonts/inter.sfont \
+           file://themes/fonts/noto.sfont \
            file://j49-screen.service \
            crate://crates.io/libc/0.2.191 \
            "
@@ -39,6 +47,8 @@ do_install:append() {
 	install -d ${D}${datadir}/j49/lang ${D}${datadir}/j49/themes
 	install -m 0644 ${UNPACKDIR}/lang/*.txt ${D}${datadir}/j49/lang/
 	install -m 0644 ${UNPACKDIR}/themes/*.theme ${D}${datadir}/j49/themes/
+	install -d ${D}${datadir}/j49/themes/fonts
+	install -m 0644 ${UNPACKDIR}/themes/fonts/*.font ${UNPACKDIR}/themes/fonts/*.sfont ${D}${datadir}/j49/themes/fonts/
 }
 
 FILES:${PN} += "${datadir}/j49"

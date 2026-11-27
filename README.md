@@ -98,8 +98,8 @@ Yocto release: blacksail. Layers: openembedded-core, meta-yocto, meta-openembedd
 - **SSH:** `ssh root@<device>`. `journalctl -u bpd` shows what the thermostat does,
   `j49-sleep status` whether and why it is awake.
 
-The screen and the web page speak English or Dutch and have three themes (default, Home Assistant,
-light); both are chosen under Settings on the device or on the web page, and the names of the
+The screen and the web page speak English or Dutch and have four themes (default, Home Assistant dark and
+light, light); both are chosen under Settings on the device or on the web page, and the names of the
 entities in Home Assistant follow the language. Languages and themes are plain text files in
 `tools/lang` and `tools/themes`: see
 [docs/thermostat.md](docs/thermostat.md#languages-locale-and-themes).

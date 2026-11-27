@@ -26,11 +26,14 @@ const PAGE: &str = include_str!("page.html");
 // to them or replace them. /var/lib/j49/ui holds the choice: lang=<code>, theme=<name>.
 const UI_FILE: &str = "/var/lib/j49/ui";
 const BUILTIN_LANGS: [(&str, &str); 2] = [("en", include_str!("../../lang/en.txt")), ("nl", include_str!("../../lang/nl.txt"))];
-const BUILTIN_THEMES: [(&str, &str); 3] = [
+const BUILTIN_THEMES: [(&str, &str); 4] = [
     ("default", include_str!("../../themes/default.theme")),
     ("home-assistant", include_str!("../../themes/home-assistant.theme")),
+    ("home-assistant-light", include_str!("../../themes/home-assistant-light.theme")),
     ("light", include_str!("../../themes/light.theme")),
 ];
+/// The start screens j49-screen can show (its SPLASH_STYLES).
+const SPLASH_STYLES: [&str; 3] = ["name", "flame", "none"];
 const THEME_COLORS: [&str; 12] = ["bg", "surface", "surface2", "line", "dim", "text", "strong", "accent", "heat", "ok", "error", "info"];
 type Texts = HashMap<&'static str, &'static str>;
 /// (the UI file as it was read, chosen language, English)
@@ -146,10 +149,14 @@ fn ui_json() -> String {
         .iter()
         .filter_map(|k| mine.get(*k).filter(|v| hex(v)).or_else(|| base.get(*k).filter(|v| hex(v))).map(|v| format!("\"{k}\":{}", json_str(v))))
         .collect();
+    // the font of the page: a CSS font-family list from the theme, nothing else in it
+    let font = mine.get("web_font").or_else(|| base.get("web_font")).filter(|f| f.len() <= 200 && f.chars().all(|c| c.is_ascii_alphanumeric() || " ,\"'-_".contains(c))).cloned().unwrap_or_default();
     format!(
-        "{{\"lang\":{},\"theme\":{},\"langs\":[{}],\"themes\":[{}],\"texts\":{{{}}},\"colors\":{{{}}}}}",
+        "{{\"lang\":{},\"theme\":{},\"splash\":{},\"font\":{},\"langs\":[{}],\"themes\":[{}],\"texts\":{{{}}},\"colors\":{{{}}}}}",
         json_str(&lang),
         json_str(&theme),
+        json_str(kv(UI_FILE).get("splash").map(|s| s.as_str()).filter(|s| SPLASH_STYLES.contains(s)).unwrap_or("name")),
+        json_str(&font),
         langs.join(","),
         themes.join(","),
         texts.join(","),
@@ -163,12 +170,13 @@ fn check_ui(body: &str) -> Result<Vec<(&'static str, String)>, String> {
         let ok = match k.as_str() {
             "lang" => find_file("lang", &v, "txt", &BUILTIN_LANGS).is_some(),
             "theme" => find_file("themes", &v, "theme", &BUILTIN_THEMES).is_some(),
+            "splash" => SPLASH_STYLES.contains(&v.as_str()),
             _ => return Err(format!("{}: {k}", tw("err.unknown_setting"))),
         };
         if !ok {
             return Err(format!("{} {k}", tw("err.bad_value")));
         }
-        out.push((if k == "lang" { "lang" } else { "theme" }, v));
+        out.push((["lang", "theme", "splash"].into_iter().find(|n| *n == k).unwrap_or("lang"), v));
     }
     if out.is_empty() {
         return Err(tw("err.nothing").into());
@@ -1148,8 +1156,11 @@ mod tests {
         }
         let j = ui_json();
         assert!(j.contains("\"lang\":\"en\"") && j.contains("\"accent\":\"f0b429\"") && j.contains("\"id\":\"home-assistant\""));
+        assert!(j.contains("\"font\":\"system-ui, -apple-system, \\\"Segoe UI\\\", sans-serif\""), "{j}");
         assert!(j.contains("\"locale.decimal\":\".\"") && j.contains("\"login\":\"Log in\""));
         assert!(check_ui("lang=nl\ntheme=light").is_ok());
+        assert!(check_ui("splash=flame").is_ok() && check_ui("splash=castle").is_err());
+        assert!(j.contains("\"splash\":\"name\"") && j.contains("\"id\":\"home-assistant-light\""));
         assert!(check_ui("lang=../etc").is_err() && check_ui("theme=nope").is_err() && check_ui("").is_err());
     }
     #[test]

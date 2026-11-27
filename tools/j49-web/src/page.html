@@ -7,7 +7,7 @@
 <style>
 :root{--bg:#0a0c10;--card:#12161e;--card2:#191e29;--line:#2a3040;--dim:#7d869a;--text:#d6dae3;--strong:#f0f2f6;--gold:#f0b429;--green:#45c16b;--red:#e5484d;--cyan:#3dbdc9;--orange:#ff8a3d}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+body{margin:0;background:var(--bg);color:var(--text);font:16px/1.45 var(--font,system-ui,-apple-system,"Segoe UI",sans-serif)}
 main{max-width:560px;margin:0 auto;padding:20px 16px 48px}
 header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px}
 h1{font-size:18px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold);margin:0;font-weight:600}
@@ -137,6 +137,8 @@ button.danger{border-color:var(--red);color:var(--red)}
   <div class="row"><div class="what" data-t="volume">Volume of the beeps</div><input type="range" id="d-vol" min="0" max="10" step="1" aria-label="volume" data-ta="aria.volume"></div>
   <div class="row"><div class="what" data-t="language">Language</div><select id="d-lang" aria-label="language" data-ta="aria.language"></select></div>
   <div class="row"><div class="what" data-t="theme">Theme</div><select id="d-theme" aria-label="theme" data-ta="aria.theme"></select></div>
+  <div class="row"><div class="what"><span data-t="splash">Start screen</span><small data-t="splash.help"></small></div>
+    <select id="d-splash" aria-label="start screen" data-ta="aria.splash"><option value="name" data-t="splash.name"></option><option value="flame" data-t="splash.flame"></option><option value="none" data-t="splash.none"></option></select></div>
   <div class="row" id="font-row" hidden><div class="what" data-t="font">Large digits</div>
     <select id="d-font" aria-label="font" data-ta="aria.font"><option value="1" data-t="font.dots">Dots</option><option value="0" data-t="font.blocks">Blocks</option><option value="2" data-t="font.smooth">Smoothed</option><option value="4" data-t="font.thin">Thin strokes</option><option value="3" data-t="font.segments">Seven-segment</option></select></div>
   <div class="row"><div class="what"><span data-t="offset">Temperature correction</span><small data-t="offset.help">Added to the measured temperature. The device warms its own sensor.</small></div>
@@ -195,11 +197,13 @@ function applyUi() {
   // text on the accent colour: dark on a light accent, light on a dark one
   const a = UI.colors.accent || "f0b429", lum = (parseInt(a.slice(0, 2), 16) * 299 + parseInt(a.slice(2, 4), 16) * 587 + parseInt(a.slice(4, 6), 16) * 114) / 1000;
   root.setProperty("--on-gold", lum > 140 ? "#16130a" : "#ffffff");
+  if (/^[\w ,"'-]+$/.test(UI.font || "")) root.setProperty("--font", UI.font); else root.removeProperty("--font");
   for (const [id, list, cur] of [["d-lang", UI.langs, UI.lang], ["d-theme", UI.themes, UI.theme]]) {
     const sel = $(id); sel.textContent = "";
     for (const it of list) { const o = document.createElement("option"); o.value = it.id; o.textContent = it.name; sel.appendChild(o); }
     sel.value = cur;
   }
+  $("d-splash").value = UI.splash || "name";
 }
 async function loadUi() {
   try { UI = await (await fetch("/api/ui", {credentials: "same-origin"})).json(); } catch (e) {}
@@ -370,8 +374,8 @@ $("d-bright").onchange = () => dev("brightness=" + $("d-bright").value);
 $("d-vol").onchange = () => dev("volume=" + $("d-vol").value);
 $("d-ring").oninput = () => devDirty = true;
 $("d-font").onchange = () => dev("font=" + $("d-font").value);
-$("d-lang").onchange = $("d-theme").onchange = async () => {
-  try { await api("POST", "/api/ui", "lang=" + $("d-lang").value + "\ntheme=" + $("d-theme").value + "\n"); await loadUi(); } catch (e) { say(e.message, "err"); }
+$("d-lang").onchange = $("d-theme").onchange = $("d-splash").onchange = async () => {
+  try { await api("POST", "/api/ui", "lang=" + $("d-lang").value + "\ntheme=" + $("d-theme").value + "\nsplash=" + $("d-splash").value + "\n"); await loadUi(); } catch (e) { say(e.message, "err"); }
 };
 $("d-ring-save").onclick = () => dev("ringrev=" + $("d-ring").value.trim());
 document.querySelectorAll("[data-dev]").forEach(b => b.onclick = () => {

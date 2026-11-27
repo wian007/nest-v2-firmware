@@ -27,6 +27,9 @@ assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
   assert.equal(rom.jump, 0x80100000);
   assert.equal(last, 27876 + 100000 + 300001);
   assert(logs.some(l => l.includes("loader: hello")));
+  // a thermostat that hangs in boot mode: the first read fails
+  const dead = new MockRom(); dead.transferIn = async () => { throw new Error("A transfer error has occurred."); };
+  await assert.rejects(romBoot(dead, files, 0x80100000), e => e.code === "stale");
   console.log("ok  ROM push");
 }
 

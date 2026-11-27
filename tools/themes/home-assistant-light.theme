@@ -1,0 +1,21 @@
+# After the default light theme of Home Assistant: light grey page, white cards, dark text,
+# blue accent and the orange Home Assistant uses for "heating".
+name=HOME ASSISTANT LIGHT
+bg=fafafa
+surface=ffffff
+surface2=eeeeee
+line=dcdcdc
+dim=727272
+text=212121
+strong=000000
+accent=03a9f4
+heat=ff8100
+ok=43a047
+error=db4437
+info=0288d1
+# Roboto, the font of Home Assistant (a smooth font; falls back to the built-in one where
+# the file is not installed)
+font=roboto
+digits=smooth
+web_font=Roboto, "Noto Sans", system-ui, sans-serif
+dial=18

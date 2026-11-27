@@ -28,15 +28,19 @@ use std::time::Duration;
 // ======================================================================================
 const UI_FILE: &str = "/var/lib/j49/ui";
 const BUILTIN_LANGS: [(&str, &str); 2] = [("en", include_str!("../../lang/en.txt")), ("nl", include_str!("../../lang/nl.txt"))];
-const BUILTIN_THEMES: [(&str, &str); 3] = [
+const BUILTIN_THEMES: [(&str, &str); 4] = [
     ("default", include_str!("../../themes/default.theme")),
     ("home-assistant", include_str!("../../themes/home-assistant.theme")),
+    ("home-assistant-light", include_str!("../../themes/home-assistant-light.theme")),
     ("light", include_str!("../../themes/light.theme")),
 ];
 type Texts = std::collections::HashMap<&'static str, &'static str>;
 static TEXTS: Mutex<Option<(&'static Texts, &'static Texts)>> = Mutex::new(None); // chosen language, English
 static UI_LANG: Mutex<String> = Mutex::new(String::new());
 static UI_THEME: Mutex<String> = Mutex::new(String::new());
+/// Which start screen: chosen in /var/lib/j49/ui (splash=<style>) or on the web page.
+const SPLASH_STYLES: [&str; 3] = ["name", "flame", "none"];
+static SPLASH_STYLE: AtomicU32 = AtomicU32::new(0);
 static SPLASH_TITLE: Mutex<String> = Mutex::new(String::new()); // the large word on the start screen (theme: splash=)
 
 /// key=value lines; "#" starts a comment line. The text is kept for the life of the program.
@@ -51,11 +55,18 @@ fn parse_kv(text: String) -> &'static Texts {
     Box::leak(Box::new(map))
 }
 /// A language or theme file by name: the user's own, the installed one, the built-in one.
+/// Where language, theme and font files are looked for: the user's own, then the installed
+/// ones. J49_DATA=<dir> comes first when set (on a PC: the `tools` directory of the repository).
+fn data_dirs() -> Vec<String> {
+    let mut v: Vec<String> = std::env::var("J49_DATA").ok().into_iter().collect();
+    v.extend(["/var/lib/j49".to_string(), "/usr/share/j49".to_string()]);
+    v
+}
 fn find_file(kind: &str, name: &str, ext: &str, builtin: &[(&str, &str)]) -> Option<String> {
     if name.is_empty() || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_') {
         return None;
     }
-    for dir in ["/var/lib/j49", "/usr/share/j49"] {
+    for dir in data_dirs() {
         if let Ok(s) = std::fs::read_to_string(format!("{dir}/{kind}/{name}.{ext}")) {
             return Some(s);
         }
@@ -152,12 +163,23 @@ fn apply_theme_text(text: &str) {
             if let Ok(rgb) = u32::from_str_radix(v.trim_start_matches('#'), 16) {
                 c::COLORS[i].store(0xFF00_0000 | (rgb & 0x00FF_FFFF), Ordering::Relaxed);
             }
-        } else if k == "splash" {
+        } else if k == "splash_text" || k == "splash" {
             *SPLASH_TITLE.lock().unwrap() = v.to_uppercase().chars().take(8).collect();
-        } else if k == "font" {
-            if let Ok(n) = v.parse::<u32>() {
-                BIG_FONT.store(n.min(4), Ordering::Relaxed);
+        } else if k == "digits" || (k == "font" && v.parse::<u32>().is_ok()) {
+            // the look of large text; a number in font= is the same thing (themes of before)
+            let style = match v {
+                "blocks" => Some(0),
+                "dots" => Some(1),
+                "smooth" => Some(2),
+                "segments" => Some(3),
+                "thin" => Some(4),
+                n => n.parse::<u32>().ok().map(|n| n.min(4)),
+            };
+            if let Some(n) = style {
+                BIG_FONT.store(n, Ordering::Relaxed);
             }
+        } else if k == "font" {
+            set_font(v);
         } else if k == "dial" {
             if let Ok(n) = v.parse::<u32>() {
                 c::DIAL.store(n.clamp(4, 40), Ordering::Relaxed);
@@ -190,10 +212,17 @@ fn load_ui() {
     let env = |k: &str| std::env::var(k).ok();
     set_language(&env("J49_LANG").or_else(|| get("lang")).unwrap_or_else(|| "en".into()));
     set_theme(&env("J49_THEME").or_else(|| get("theme")).unwrap_or_else(|| "default".into()));
+    // J49_FONT tries a font with any theme (screenshots, the emulator)
+    if let Some(font) = env("J49_FONT") {
+        set_font(&font);
+    }
+    let style = env("J49_SPLASH").or_else(|| get("splash")).unwrap_or_default();
+    SPLASH_STYLE.store(SPLASH_STYLES.iter().position(|s| *s == style).unwrap_or(0) as u32, Ordering::Relaxed);
 }
 /// Write lang= and theme=, keep whatever else is in the file.
 fn save_ui() {
     let old = std::fs::read_to_string(UI_FILE).unwrap_or_default();
+    // (splash= and anything else in the file is kept as it is)
     let mut out: String = old.lines().filter(|l| !l.starts_with("lang=") && !l.starts_with("theme=")).map(|l| format!("{l}\n")).collect();
     out.push_str(&format!("lang={}\ntheme={}\n", UI_LANG.lock().unwrap(), UI_THEME.lock().unwrap()));
     let _ = std::fs::create_dir_all("/var/lib/j49");
@@ -436,6 +465,32 @@ impl Fb {
     }
     fn text(&mut self, x: i32, y: i32, s: &str, scale: i32, c: u32) {
         let mut cx = x;
+        if let Some(sf) = *SFONT.lock().unwrap() {
+            // a smooth font: blend each pixel by its coverage
+            let glyphs = sf.size(scale);
+            for ch in s.chars() {
+                if let Some(g) = SFont::glyph(glyphs, ch) {
+                    for gy in 0..g.h {
+                        let py = y + g.yoff + gy as i32;
+                        if py < 0 || py >= H as i32 {
+                            continue;
+                        }
+                        for gx in 0..g.w {
+                            let px = cx + g.xoff + gx as i32;
+                            let i = gy * g.w + gx;
+                            let a = (sf.data[g.at + i / 2] >> if i % 2 == 0 { 4 } else { 0 }) & 15;
+                            if a == 0 || px < 0 || px >= W as i32 {
+                                continue;
+                            }
+                            let at = py as usize * W + px as usize;
+                            self.buf[at] = if a == 15 { c } else { blend(self.buf[at], c, a as f32 / 15.0) };
+                        }
+                    }
+                }
+                cx += SFont::advance(glyphs, ch, scale);
+            }
+            return;
+        }
         let font = BIG_FONT.load(Ordering::Relaxed);
         for ch in s.chars() {
             if scale >= 3 && font != 0 {
@@ -447,6 +502,10 @@ impl Fb {
         }
     }
     fn text_w(s: &str, scale: i32) -> i32 {
+        if let Some(sf) = *SFONT.lock().unwrap() {
+            let glyphs = sf.size(scale);
+            return s.chars().map(|ch| SFont::advance(glyphs, ch, scale)).sum();
+        }
         s.chars().count() as i32 * 6 * scale - scale
     }
     fn text_center(&mut self, cx: i32, y: i32, s: &str, scale: i32, c: u32) {
@@ -498,7 +557,9 @@ impl Fb {
 /// Look of large text: 0 blocks, 1 dots, 2 smoothed, 3 seven-segment digits, 4 thin strokes
 /// (font= in /var/lib/j49-screen/settings).
 static BIG_FONT: AtomicU32 = AtomicU32::new(2);
-fn glyph(ch: char) -> [u8; 7] {
+/// The glyphs of the built-in font, 5 wide and 7 high, one bit per pixel (bit 4 = left).
+const BUILTIN_CHARS: &str = "0123456789ABCDEFGHIJKLMNOPRSTUVWYQXZ%:/.,-=+><";
+fn builtin_glyph(ch: char) -> [u8; 7] {
     match ch.to_ascii_uppercase() {
         '0' => [0b01110, 0b10001, 0b10011, 0b10101, 0b11001, 0b10001, 0b01110],
         '1' => [0b00100, 0b01100, 0b00100, 0b00100, 0b00100, 0b00100, 0b01110],
@@ -544,8 +605,147 @@ fn glyph(ch: char) -> [u8; 7] {
         '-' => [0b00000, 0b00000, 0b00000, 0b11111, 0b00000, 0b00000, 0b00000],
         '=' => [0b00000, 0b00000, 0b11111, 0b00000, 0b11111, 0b00000, 0b00000],
         '+' => [0b00000, 0b00100, 0b00100, 0b11111, 0b00100, 0b00100, 0b00000],
+        '>' => [0b01000, 0b00100, 0b00010, 0b00001, 0b00010, 0b00100, 0b01000],
+        '<' => [0b00010, 0b00100, 0b01000, 0b10000, 0b01000, 0b00100, 0b00010],
         _ => [0; 7],
     }
+}
+// ---- fonts: glyphs from a file of the theme (tools/themes/fonts/<name>.font) ----
+// A font file is text: a line "glyph <character>" (or "glyph U+00E9"), then seven rows of five
+// characters, "#" for a lit pixel and "." for a dark one. A file only has to hold the glyphs it
+// changes or adds; everything else comes from the built-in font. A font can add characters the
+// built-in one lacks (accented letters, lower case): text is looked up as written first, then
+// in upper case.
+type Glyphs = std::collections::HashMap<char, [u8; 7]>;
+static FONT: Mutex<Option<&'static Glyphs>> = Mutex::new(None);
+const BUILTIN_FONTS: [(&str, &str); 4] = [
+    ("default", include_str!("../../themes/fonts/default.font")),
+    ("plain", include_str!("../../themes/fonts/plain.font")),
+    ("fixed", include_str!("../../themes/fonts/fixed.font")),
+    ("matrix", include_str!("../../themes/fonts/matrix.font")),
+];
+fn parse_font(text: &str) -> Glyphs {
+    let mut out = Glyphs::new();
+    let mut lines = text.lines().map(|l| l.trim_end()).filter(|l| !l.starts_with("//") && !l.trim().is_empty());
+    while let Some(l) = lines.next() {
+        let Some(name) = l.strip_prefix("glyph ") else { continue };
+        let name = name.trim();
+        let ch = match name.strip_prefix("U+").and_then(|h| u32::from_str_radix(h, 16).ok()).and_then(char::from_u32) {
+            Some(c) => c,
+            None if name.chars().count() == 1 => name.chars().next().unwrap(),
+            None => continue,
+        };
+        let mut rows = [0u8; 7];
+        let mut ok = true;
+        for row in rows.iter_mut() {
+            let Some(r) = lines.next() else { ok = false; break };
+            if r.starts_with("glyph ") {
+                ok = false;
+                break;
+            }
+            for (i, px) in r.chars().take(5).enumerate() {
+                if px == '#' {
+                    *row |= 0b10000 >> i;
+                }
+            }
+        }
+        if ok {
+            out.insert(ch, rows);
+        }
+    }
+    out
+}
+// ---- smooth fonts: <name>.sfont, made from a TrueType font by tools/themes/fonts/make-sans.py ----
+// Every character drawn beforehand at the sizes the screen uses, 16 levels of coverage per
+// pixel, with its own width (the 5x7 fonts above have one width for all). The format is at
+// the top of make-sans.py. These files are not built into the program: they are read from
+// the fonts directory.
+struct SGlyph {
+    w: usize,
+    h: usize,
+    xoff: i32,
+    yoff: i32,
+    adv: i32,
+    at: usize, // where its pixels start in SFont::data
+}
+struct SFont {
+    data: Vec<u8>,
+    sizes: Vec<(i32, std::collections::HashMap<char, SGlyph>)>, // (height of a capital, glyphs)
+}
+static SFONT: Mutex<Option<&'static SFont>> = Mutex::new(None);
+fn parse_sfont(data: Vec<u8>) -> Option<SFont> {
+    const MAGIC: &[u8] = b"J49SFONT1\n";
+    if !data.starts_with(MAGIC) {
+        return None;
+    }
+    let mut i = MAGIC.len();
+    let n = *data.get(i)? as usize;
+    i += 1;
+    let mut sizes = Vec::new();
+    for _ in 0..n {
+        let cap = *data.get(i)? as i32;
+        let count = u16::from_le_bytes([*data.get(i + 1)?, *data.get(i + 2)?]) as usize;
+        i += 3;
+        let mut glyphs = std::collections::HashMap::new();
+        for _ in 0..count {
+            let r = data.get(i..i + 9)?;
+            let ch = char::from_u32(u32::from_le_bytes([r[0], r[1], r[2], r[3]]))?;
+            let (w, h) = (r[4] as usize, r[5] as usize);
+            let bytes = (w * h + 1) / 2;
+            data.get(i + 9..i + 9 + bytes)?;
+            glyphs.insert(ch, SGlyph { w, h, xoff: r[6] as i8 as i32, yoff: r[7] as i8 as i32, adv: r[8] as i32, at: i + 9 });
+            i += 9 + bytes;
+        }
+        sizes.push((cap, glyphs));
+    }
+    (!sizes.is_empty()).then_some(SFont { data, sizes })
+}
+impl SFont {
+    /// The glyphs for a text scale: the size whose capital is 7 * scale pixels, or the
+    /// nearest one below it.
+    fn size(&self, scale: i32) -> &std::collections::HashMap<char, SGlyph> {
+        let want = 7 * scale;
+        let best = self.sizes.iter().filter(|(cap, _)| *cap <= want).max_by_key(|(cap, _)| *cap).or(self.sizes.first());
+        &best.unwrap().1
+    }
+    /// A character as written; else its capital; else nothing (a gap as wide as a space).
+    fn glyph<'a>(glyphs: &'a std::collections::HashMap<char, SGlyph>, ch: char) -> Option<&'a SGlyph> {
+        glyphs.get(&ch).or_else(|| ch.to_uppercase().next().and_then(|u| glyphs.get(&u)))
+    }
+    fn advance(glyphs: &std::collections::HashMap<char, SGlyph>, ch: char, scale: i32) -> i32 {
+        Self::glyph(glyphs, ch).or_else(|| glyphs.get(&' ')).map(|g| g.adv).unwrap_or(3 * scale)
+    }
+}
+/// Choose the font of the theme: a smooth font (<name>.sfont) when there is one, else a 5x7
+/// font (<name>.font); a name that does not exist gives the built-in glyphs.
+fn set_font(name: &str) {
+    let safe = !name.is_empty() && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+    let smooth = data_dirs().iter().filter(|_| safe).find_map(|dir| std::fs::read(format!("{dir}/themes/fonts/{name}.sfont")).ok()).and_then(parse_sfont);
+    *SFONT.lock().unwrap() = smooth.map(|f| &*Box::leak(Box::new(f)));
+    let text = find_file("themes/fonts", name, "font", &BUILTIN_FONTS);
+    *FONT.lock().unwrap() = text.map(|t| &*Box::leak(Box::new(parse_font(&t)))).filter(|g| !g.is_empty());
+}
+fn glyph(ch: char) -> [u8; 7] {
+    if let Some(font) = *FONT.lock().unwrap() {
+        if let Some(g) = font.get(&ch).or_else(|| ch.to_uppercase().next().and_then(|u| font.get(&u))) {
+            return *g;
+        }
+    }
+    builtin_glyph(ch)
+}
+/// The built-in font as a font file (`j49-screen --dump-font`): the start of a font of your own.
+fn dump_font() -> String {
+    let mut out = String::from(
+        "// The built-in font of j49-screen as a font file. Copy it, change glyphs, give it a name\n// ending in .font, and name it in a theme: font=<name>. A glyph is 5 wide and 7 high:\n// \"#\" is a lit pixel, \".\" a dark one. A file only has to hold the glyphs it changes or adds.\n",
+    );
+    for ch in BUILTIN_CHARS.chars() {
+        out.push_str(&format!("\nglyph {ch}\n"));
+        for row in builtin_glyph(ch) {
+            out.push_str(&(0..5).map(|i| if row & (0b10000 >> i) != 0 { '#' } else { '.' }).collect::<String>());
+            out.push('\n');
+        }
+    }
+    out
 }
 // ---- live system probes (best effort; never panic) ----
 fn read_trim(p: &str) -> Option<String> {
@@ -1538,8 +1738,20 @@ fn render_splash(progress: f32) -> Fb {
     arc(&mut fb, DIAL_A0, DIAL_A1, r_in, 152.0, c::surface2());
     arc(&mut fb, DIAL_A0, DIAL_A0 + (DIAL_A1 - DIAL_A0) * ease, r_in, 152.0, blend(c::bg(), c::accent(), 0.35 + 0.65 * ease));
     let title = SPLASH_TITLE.lock().unwrap().clone();
-    fb.text_center(160, 112, &title, 7, blend(c::bg(), c::strong(), (p * 3.0).min(1.0)));
-    fb.text_center(160, 186, t("screen.thermostat"), 2, blend(c::bg(), c::accent(), (p * 3.0 - 0.5).clamp(0.0, 1.0)));
+    let (fade, fade2) = ((p * 3.0).min(1.0), (p * 3.0 - 0.5).clamp(0.0, 1.0));
+    match SPLASH_STYLES[SPLASH_STYLE.load(Ordering::Relaxed) as usize % SPLASH_STYLES.len()] {
+        "flame" => {
+            let fl = blend(c::bg(), c::heat(), fade);
+            for (dy, half) in [(-7, 0), (-6, 1), (-5, 1), (-4, 2), (-3, 2), (-2, 3), (-1, 4), (0, 4), (1, 4), (2, 4), (3, 3), (4, 2)] {
+                fb.rect(160 - half * 7, 122 + dy * 7, half * 14 + 7, 7, fl);
+            }
+            fb.text_center(160, 186, &title, 3, blend(c::bg(), c::strong(), fade2));
+        }
+        _ => {
+            fb.text_center(160, 112, &title, 7, blend(c::bg(), c::strong(), fade));
+            fb.text_center(160, 186, t("screen.thermostat"), 2, blend(c::bg(), c::accent(), fade2));
+        }
+    }
     let rel = std::fs::read_to_string("/etc/j49-release").unwrap_or_default();
     let ver = rel.lines().find_map(|l| l.strip_prefix("commit=")).map(|v| v.trim().chars().take(8).collect::<String>()).unwrap_or_default();
     if !ver.is_empty() {
@@ -1900,6 +2112,10 @@ fn spawn_input(page: Arc<AtomicUsize>, activity: Arc<AtomicU64>) {
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    if args.iter().any(|a| a == "--dump-font") {
+        print!("{}", dump_font());
+        return;
+    }
     let arg = |name: &str| args.iter().position(|a| a == name).and_then(|i| args.get(i + 1).cloned());
     let dev = arg("--fb").unwrap_or_else(|| "/dev/fb0".into());
     let screen = arg("--screen").unwrap_or_else(|| "home".into());
@@ -1937,12 +2153,16 @@ fn main() {
         "install" => P_INSTALL,
         "splash" => P_SPLASH,
         // a normal start begins with the start screen; a screenshot (--once) goes to the dial
+        // (load_ui runs below; the style "none" is handled there)
         _ if !once => P_SPLASH,
         _ => P_DIAL,
     }));
     let started = std::time::Instant::now();
     let act0 = WAKE.load(Ordering::Relaxed);
     load_ui();
+    if SPLASH_STYLES[SPLASH_STYLE.load(Ordering::Relaxed) as usize % SPLASH_STYLES.len()] == "none" && screen != "splash" {
+        let _ = page.compare_exchange(P_SPLASH, P_DIAL, Ordering::Relaxed, Ordering::Relaxed);
+    }
     load_settings();
     load_thermostat();
     let activity = Arc::new(AtomicU64::new(0));
@@ -2041,6 +2261,40 @@ mod tests {
         assert!(dial_point(180.0, 100.0).1 < CY - 99.0);
         assert!(dial_point(DIAL_A0, 100.0).1 > CY && dial_point(DIAL_A0, 100.0).0 < CX);
         assert!(dial_point(DIAL_A1, 100.0).0 > CX);
+    }
+    #[test]
+    fn font_files() {
+        // the dump of the built-in font reads back as the same glyphs
+        let all = parse_font(&dump_font());
+        assert_eq!(all.len(), BUILTIN_CHARS.chars().count());
+        for ch in BUILTIN_CHARS.chars() {
+            assert_eq!(all[&ch], builtin_glyph(ch), "{ch}");
+        }
+        // and default.font in the repository is that dump
+        assert_eq!(BUILTIN_FONTS[0].1, dump_font());
+        // a font may hold a few glyphs only, and characters the built-in font lacks
+        let f = parse_font("// note\nglyph 0\n.###.\n#...#\n#...#\n#...#\n#...#\n#...#\n.###.\nglyph U+00E9\n...#.\n..#..\n.###.\n#...#\n#####\n#....\n.###.\nglyph broken\n#####\n");
+        assert_eq!(f.len(), 2);
+        assert_eq!(f[&'0'][2], 0b10001);
+        assert!(f.contains_key(&'\u{e9}'));
+    }
+    #[test]
+    fn smooth_font_file() {
+        // one size (capital 7 px) with "A": 2x2 pixels, coverage 15, 8, 0, 15; and a space
+        let mut f = b"J49SFONT1\n".to_vec();
+        f.extend([1, 7, 2, 0]);
+        f.extend([0x41, 0, 0, 0, 2, 2, 1, 0xff, 4, 0xf8, 0x0f]);
+        f.extend([0x20, 0, 0, 0, 0, 0, 0, 0, 3]);
+        let sf = parse_sfont(f.clone()).unwrap();
+        let g = sf.size(3);
+        let a = SFont::glyph(g, 'a').unwrap(); // lower case falls back to the capital
+        assert_eq!((a.w, a.h, a.xoff, a.yoff, a.adv), (2, 2, 1, -1, 4));
+        assert_eq!(sf.data[a.at], 0xf8);
+        assert_eq!(SFont::advance(g, 'A', 1) + SFont::advance(g, ' ', 1) + SFont::advance(g, '#', 1), 4 + 3 + 3);
+        // a cut-off file and a wrong start are refused
+        f.truncate(f.len() - 12);
+        assert!(parse_sfont(f).is_none());
+        assert!(parse_sfont(b"nope".to_vec()).is_none());
     }
     #[test]
     fn tunes_parse() {

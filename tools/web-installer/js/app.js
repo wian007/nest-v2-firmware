@@ -6,7 +6,7 @@ import { Service, ByteReader, readBackup, verifyBackup, NEVER_WRITTEN } from "./
 
 const $ = id => document.getElementById(id);
 const LANGS = ["en", "nl"];
-const THEMES = ["default", "home-assistant", "light"];
+const THEMES = ["default", "home-assistant", "home-assistant-light", "light"];
 // The USB serial gadget of the rescue kernel (Linux g_serial).
 const SERIAL_FILTER = { usbVendorId: 0x0525, usbProductId: 0xa4a7 };
 // Where the loaders go in RAM (tools/dfu-install/session1-stock.sh).
@@ -59,6 +59,7 @@ async function setTheme(name) {
   const a = /^[0-9a-f]{6}$/i.test(t.accent || "") ? t.accent : "f0b429";
   const lum = (parseInt(a.slice(0, 2), 16) * 299 + parseInt(a.slice(2, 4), 16) * 587 + parseInt(a.slice(4, 6), 16) * 114) / 1000;
   root.setProperty("--on-accent", lum > 140 ? "#16130a" : "#ffffff");
+  if (/^[\w ,"'-]+$/.test(t.web_font || "")) root.setProperty("--font", t.web_font); else root.removeProperty("--font");
   store.set("j49.theme", name); $("theme").value = name;
 }
 
@@ -85,7 +86,8 @@ function guard(id, button, work) {
     try { await work(); }
     catch (e) {
       const cancelled = e && (e.name === "NotFoundError" || e.name === "AbortError");
-      state(id, cancelled ? T("cancelled") : T("error") + ": " + (e && e.message || e), cancelled ? "" : "bad");
+      const text = e && e.code && texts["error." + e.code] || fallback["error." + (e && e.code)] || (e && e.message || e);
+      state(id, cancelled ? T("cancelled") : T("error") + ": " + text, cancelled ? "" : "bad");
       if (!cancelled) log("ERROR " + (e && e.stack || e));
       button.disabled = false;
     }
