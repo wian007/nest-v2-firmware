@@ -976,7 +976,7 @@ static VOLUME: AtomicU32 = AtomicU32::new(5);
 static WIFI: AtomicBool = AtomicBool::new(true); // WiFi radio wanted on
 const SETTINGS_DIR: &str = "/var/lib/j49-screen";
 // ---- thermostat: mode, setpoint and sensor correction, shared with bpd through a file ----
-// /var/lib/j49/thermostat ("mode=heat|off", "setpoint=20.5", "offset=-3.0"). j49-screen writes it
+// /var/lib/j49/thermostat ("mode=heat|off", "setpoint=20.5", "offset=-2.0"). j49-screen writes it
 // when the ring changes something; bpd reads it and does the actual control. The offset is added
 // to the SHT20 reading: the head unit warms the sensor (about +3 C measured while it never sleeps).
 static SETPOINT_X10: AtomicI32 = AtomicI32::new(200); // 20.0 C
@@ -1423,6 +1423,7 @@ const P_INSTALL: usize = 3;
 const P_SETTINGS: usize = 4;
 const P_CONFIRM: usize = 5;
 const P_SPLASH: usize = 6;
+const P_WIFI: usize = 7; // the WiFi setup access point is open (j49-wifi): what to do
 const SPLASH_MS: u64 = 2500;
 
 /// What the dial shows, gathered in one place. J49_DEMO=1 gives sample values (screenshots on a
@@ -1653,13 +1654,14 @@ fn render_menu() -> Fb {
     fb.text_center(160, 272, t("screen.turn_move_click_choose"), 1, c::dim());
     fb
 }
-const SETTINGS_ROWS: u32 = 7;
+const SETTINGS_ROWS: u32 = 8;
 fn render_settings() -> Fb {
     let mut fb = Fb::new();
     fb.fill(c::bg());
     fb.text_center(160, 40, t("screen.settings"), 2, c::accent());
     let (row, edit) = (ROW.load(Ordering::Relaxed), EDIT.load(Ordering::Relaxed));
     let (w, wc) = on_off(WIFI.load(Ordering::Relaxed));
+    let (h, hc) = on_off(WIFI_SETUP.lock().unwrap().is_some());
     let b = format!("{}%", BRIGHT.load(Ordering::Relaxed) * 100 / 120);
     let vol = format!("{}", VOLUME.load(Ordering::Relaxed));
     let theme = theme_title();
@@ -1667,13 +1669,14 @@ fn render_settings() -> Fb {
         (t("screen.brightness"), b.as_str(), c::text()),
         (t("screen.volume"), vol.as_str(), c::text()),
         (t("screen.wifi"), w, wc),
+        (t("screen.hotspot"), h, hc),
         (t("screen.language"), t("lang.name"), c::text()),
         (t("screen.theme"), theme.as_str(), c::text()),
-        (t("screen.restart"), if edit && row == 5 { t("screen.click_yes") } else { "" }, c::error()),
+        (t("screen.restart"), if edit && row == 6 { t("screen.click_yes") } else { "" }, c::error()),
         (t("screen.back"), "", c::dim()),
     ];
     for (i, (l, v, col)) in rows.iter().enumerate() {
-        list_row(&mut fb, 62 + i as i32 * 29, l, v, *col, i as u32 == row, edit && i as u32 == row);
+        list_row(&mut fb, 58 + i as i32 * 26, l, v, *col, i as u32 == row, edit && i as u32 == row);
     }
     fb.text_center(160, 272, t("screen.click_change_turn_value"), 1, c::dim());
     fb
@@ -1700,6 +1703,41 @@ fn render_status() -> Fb {
         list_row(&mut fb, 66 + i as i32 * 28, l, v, *col, false, false);
     }
     fb.text_center(160, 272, t("screen.click_back"), 1, c::dim());
+    fb
+}
+// ---- WiFi setup: j49-wifi opened its access point because there is no network ----
+/// (name of the access point, address of the page) while it is open.
+static WIFI_SETUP: Mutex<Option<(String, String)>> = Mutex::new(None);
+/// The setup page was put away with a click; it comes back when the access point opens again.
+static WIFI_SETUP_SEEN: AtomicBool = AtomicBool::new(false);
+fn spawn_wifi_setup() {
+    std::thread::spawn(|| loop {
+        std::thread::sleep(Duration::from_secs(2));
+        let s = std::fs::read_to_string("/run/j49-wifi.state").unwrap_or_default();
+        let get = |k: &str| s.lines().find_map(|l| l.strip_prefix(k).and_then(|v| v.strip_prefix('='))).unwrap_or("").trim().to_string();
+        let now = if get("mode") == "ap" { Some((get("ssid").chars().take(20).collect::<String>(), get("ip").chars().take(15).collect::<String>())) } else { None };
+        let mut g = WIFI_SETUP.lock().unwrap();
+        if *g != now {
+            if now.is_some() {
+                // light the panel once and show the page again
+                WIFI_SETUP_SEEN.store(false, Ordering::Relaxed);
+                WAKE.fetch_add(1, Ordering::Relaxed);
+            }
+            *g = now;
+        }
+    });
+}
+fn render_wifi_setup() -> Fb {
+    let mut fb = Fb::new();
+    fb.fill(c::bg());
+    let (ssid, ip) = WIFI_SETUP.lock().unwrap().clone().unwrap_or_default();
+    fb.text_center(160, 44, t("screen.wifi_setup"), 2, c::accent());
+    fb.text_center(160, 92, t("screen.connect_to"), 1, c::dim());
+    fb.text_center(160, 110, &ssid, 2, c::strong());
+    fb.text_center(160, 158, t("screen.then_open"), 1, c::dim());
+    fb.text_center(160, 176, &ip, 2, c::strong());
+    fb.text_center(160, 222, t("screen.confirm_here"), 1, c::dim());
+    fb.text_center(160, 268, t("screen.click_for_dial"), 1, c::dim());
     fb
 }
 fn render_confirm() -> Fb {
@@ -1938,16 +1976,25 @@ fn click(page: &AtomicUsize) {
                     std::thread::spawn(move || wifi_apply(on));
                 }
                 3 => {
+                    // the setup hotspot (j49-wifi does the work): open it now, or close it
+                    if WIFI.load(Ordering::Relaxed) {
+                        let open = WIFI_SETUP.lock().unwrap().is_some();
+                        let _ = std::fs::write("/run/j49-wifi.want", if open { "off\n" } else { "on\n" });
+                    } else {
+                        piezo_beep(500.0, 60); // WiFi is switched off
+                    }
+                }
+                4 => {
                     let cur = UI_LANG.lock().unwrap().clone();
                     set_language(&next_of(list_files("lang", "txt", &BUILTIN_LANGS), &cur));
                     save_ui();
                 }
-                4 => {
+                5 => {
                     let cur = UI_THEME.lock().unwrap().clone();
                     set_theme(&next_of(list_files("themes", "theme", &BUILTIN_THEMES), &cur));
                     save_ui();
                 }
-                5 => {
+                6 => {
                     if edit {
                         save_settings();
                         let _ = std::process::Command::new("systemctl").arg("reboot").spawn();
@@ -1963,6 +2010,11 @@ fn click(page: &AtomicUsize) {
         }
         P_CONFIRM => {
             web_answer(CONFIRM_YES.load(Ordering::Relaxed));
+            page.store(P_DIAL, Ordering::Relaxed);
+        }
+        P_WIFI => {
+            // put the setup page away; the dial is behind it
+            WIFI_SETUP_SEEN.store(true, Ordering::Relaxed);
             page.store(P_DIAL, Ordering::Relaxed);
         }
         _ => {}
@@ -2152,6 +2204,10 @@ fn main() {
         "settings" => P_SETTINGS,
         "install" => P_INSTALL,
         "splash" => P_SPLASH,
+        "wifi" => {
+            *WIFI_SETUP.lock().unwrap() = Some(("J49-SETUP-A1B2".into(), "192.168.4.1".into()));
+            P_WIFI
+        }
         // a normal start begins with the start screen; a screenshot (--once) goes to the dial
         // (load_ui runs below; the style "none" is handled there)
         _ if !once => P_SPLASH,
@@ -2174,6 +2230,7 @@ fn main() {
         spawn_control();
         spawn_motion_wake();
         spawn_web_confirm();
+        spawn_wifi_setup();
         spawn_input(page.clone(), activity.clone());
     }
     let bl = backlight_path();
@@ -2222,6 +2279,13 @@ fn main() {
         } else if page.load(Ordering::Relaxed) == P_CONFIRM {
             page.store(P_DIAL, Ordering::Relaxed);
         }
+        // no network: the setup page takes the place of the dial until it is put away
+        let setup = WIFI_SETUP.lock().unwrap().is_some();
+        if setup && !WIFI_SETUP_SEEN.load(Ordering::Relaxed) && page.load(Ordering::Relaxed) == P_DIAL {
+            page.store(P_WIFI, Ordering::Relaxed);
+        } else if page.load(Ordering::Relaxed) == P_WIFI && !setup {
+            page.store(P_DIAL, Ordering::Relaxed);
+        }
         // the start screen ends by itself, or at the first touch of the ring
         if page.load(Ordering::Relaxed) == P_SPLASH && !once && (started.elapsed() >= Duration::from_millis(SPLASH_MS) || a != act0) {
             page.store(P_DIAL, Ordering::Relaxed);
@@ -2233,6 +2297,7 @@ fn main() {
             P_STATUS => render_status(),
             P_SETTINGS => render_settings(),
             P_CONFIRM => render_confirm(),
+            P_WIFI => render_wifi_setup(),
             P_INSTALL => render_install(&read_install_state(&state_path)),
             _ => render_dial(),
         };

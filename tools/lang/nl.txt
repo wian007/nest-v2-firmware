@@ -55,6 +55,12 @@ screen.backplate=BACKPLATE
 screen.install=INSTALLEREN
 screen.error=FOUT
 screen.thermostat=THERMOSTAAT
+screen.hotspot=WIFI-HOTSPOT
+screen.wifi_setup=WIFI INSTELLEN
+screen.connect_to=VERBIND EEN TELEFOON OF LAPTOP MET
+screen.then_open=OPEN DAARNA IN EEN BROWSER
+screen.confirm_here=LOG DAAR IN EN BEVESTIG HIER
+screen.click_for_dial=KLIK = WIJZERPLAAT
 screen.theme=THEMA
 
 # --- de webpagina (j49-web) ---
@@ -161,7 +167,7 @@ web.aria.ringrev=ringtellen
 web.aria.volume=volume
 web.wifi.switch.ask=De thermostaat schakelt over naar het nieuwe netwerk. Deze pagina verliest dan de verbinding. Doorgaan?
 web.restart.ask=De thermostaat herstart. Dat duurt ongeveer twee minuten; de verwarming gaat zolang uit. Doorgaan?
-web.kind.help=Klep (stadsverwarming): 30 s uit, 0 s aan. Ketel: 180 s uit, 60 s aan.
+web.kind.help=Klep (stadsverwarming): 10 s uit, 0 s aan. Ketel: 180 s uit, 60 s aan.
 web.mqtt.bad_credentials=naam of wachtwoord fout
 web.mqtt.not_authorized=niet toegelaten: naam en wachtwoord nodig
 web.mqtt.saved=Broker opgeslagen. De verbinding wordt opnieuw gemaakt.
@@ -170,7 +176,8 @@ web.schedule.bad_temp=De temperatuur moet tussen 9 en 32 liggen.
 web.login.refused=Geweigerd op de thermostaat, of te laat.
 web.state.no_backplate=Geen backplate: er wordt niet gestookt
 web.why.bpd=geen contact met de backplate-dienst
-web.sleep.never=Het apparaat blijft altijd aan.
+web.sleep.never=Het apparaat blijft altijd aan. Op een backplate zonder aparte voeding loopt de accu dan binnen een nacht leeg.
+web.sleep.warn=Zonder slapen verbruikt de thermostaat meer dan de backplate kan leveren: de accu loopt binnen een nacht leeg en de thermostaat valt uit. Slapen uitzetten?
 web.schedule.no_days=Een tijdstip heeft geen dagen.
 web.password.keep=ingesteld; leeg laten = houden
 web.sleep.count=keer geslapen; laatste keer

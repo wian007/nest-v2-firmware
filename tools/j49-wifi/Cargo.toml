@@ -1,0 +1,14 @@
+[package]
+name = "j49-wifi"
+version = "0.1.0"
+edition = "2021"
+description = "Opens a WiFi hotspot for setup when the J49 thermostat has no network, and closes it when it has one"
+license = "MIT"
+
+[dependencies]
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

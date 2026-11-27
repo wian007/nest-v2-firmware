@@ -112,7 +112,7 @@ the saving, since PER and CORE still do not reach retention.
 
 ## The sleep manager (j49-sleep)
 
-`tools/j49-sleep`, service `j49-sleep.service`. **Off unless enabled**: `j49-sleep on|off|status`,
+`tools/j49-sleep`, service `j49-sleep.service`. **On unless switched off** (since 27 November 2026; before that it was off unless enabled): `j49-sleep on|off|status`,
 the switch "Slapen" on the web page, or the MQTT switch "Slapen toegestaan"
 (`/var/lib/j49/sleep`: `enabled=`, `idle=` 20 s, `max=` 1500 s, `motion=` on).
 

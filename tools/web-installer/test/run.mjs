@@ -7,6 +7,7 @@ import { randomBytes } from "node:crypto";
 import { romBoot } from "../js/omap.js";
 import { Dfu } from "../js/dfu.js";
 import { Service, ByteReader, readBackup, verifyBackup, crc32, notAJ49, J49_LAYOUT, NEVER_WRITTEN } from "../js/service.js";
+import { UsbSerial } from "../js/usbserial.js";
 import { MockRom, MockDfu, nandio } from "./mock.mjs";
 
 const rnd = n => new Uint8Array(randomBytes(n));
@@ -76,7 +77,19 @@ assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
   Object.entries(orig).forEach(([n, b], i) => { mtd += "mtd" + (i + 1) + ": " + b.length.toString(16).padStart(8, "0") + ' 00020000 "' + n + '"\n'; writeFileSync(join(dir, n), b); });
   writeFileSync(join(dir, "mtd"), mtd); writeFileSync(join(dir, "nand0"), Buffer.alloc(total, 0xff));
   const dev = nandio(exe, dir);
-  const svc = new Service(new ByteReader(dev.pull), dev.write);
+  // through the WebUSB serial transport (as on Android), on a stand-in for the USB device
+  const usb = {
+    configuration: { interfaces: [
+      { interfaceNumber: 0, alternates: [{ interfaceClass: 2, endpoints: [{ type: "interrupt", direction: "in", endpointNumber: 3 }] }] },
+      { interfaceNumber: 1, alternates: [{ interfaceClass: 10, endpoints: [{ type: "bulk", direction: "in", endpointNumber: 1, packetSize: 512 }, { type: "bulk", direction: "out", endpointNumber: 2, packetSize: 512 }] }] }] },
+    claimed: [], open: async () => {}, close: async () => {}, claimInterface: async n => { usb.claimed.push(n); },
+    controlTransferOut: async s => { usb.line = s; return { status: "ok" }; },
+    transferIn: async (ep, n) => { assert.equal(ep, 1); const v = await dev.pull(); if (!v) throw new Error("gone"); return { status: "ok", data: new DataView(v.buffer, v.byteOffset, v.byteLength) }; },
+    transferOut: async (ep, d) => { assert.equal(ep, 2); await dev.write(d); return { status: "ok" }; },
+  };
+  const us = new UsbSerial(usb); await us.open();
+  assert.deepEqual(usb.claimed, [0, 1]); assert.equal(usb.line.request, 0x22);
+  const svc = new Service(new ByteReader(() => us.pull()), d => us.write(d));
   await svc.start();
   const parts = await svc.info();
   assert.deepEqual(parts.map(p => p.name), ["nand0", "ipl", "spl0", "spl1", "root0"]);

@@ -594,7 +594,7 @@ fn states() -> Vec<(&'static str, String)> {
         v.push(("say", std::fs::read_to_string(p("/run/j49-mqtt.say")).unwrap_or_default()));
     }
     // sleeping allowed (j49-sleep acts on it)
-    v.push(("sleep", if kv("/var/lib/j49/sleep").get("enabled").map(|s| s == "on").unwrap_or(false) { "ON" } else { "OFF" }.to_string()));
+    v.push(("sleep", if kv("/var/lib/j49/sleep").get("enabled").map(|s| s == "on").unwrap_or(true) { "ON" } else { "OFF" }.to_string()));
     // the panel: ON = lit, OFF = asleep (j49-screen reports it)
     if let Some(a) = kv("/run/j49-screen.state").get("asleep") {
         v.push(("screen", if a == "1" { "OFF" } else { "ON" }.to_string()));

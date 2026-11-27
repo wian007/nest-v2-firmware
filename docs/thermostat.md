@@ -9,13 +9,13 @@ within a second or two.
 
     mode=heat          # heat | off
     setpoint=20.5      # target, 9.0 .. 32.0
-    offset=-3.0        # added to the SHT20 reading; the head unit warms its own sensor
+    offset=-2.0        # added to the SHT20 reading; the head unit warms its own sensor
     frost=5.0          # frost protection threshold used in mode off; 0 disables it
     schedule=on        # on | off: follow /var/lib/j49/schedule
     away=off           # on = nobody home: in mode heat the target is away_temp, not setpoint
     away_temp=15.0     # target while away, 9.0 .. 32.0 (default 15.0)
-    min_off=180        # seconds off before a new start (default 180, 0 .. 600)
-    min_on=60          # seconds on before switching off for "warm enough" (default 60, 0 .. 600)
+    min_off=10         # seconds off before a new start (default 10, 0 .. 600)
+    min_on=0           # seconds on before switching off for "warm enough" (default 0, 0 .. 600)
     tz=CET-1CEST,M3.5.0,M10.5.0/3   # optional POSIX time zone rule; this is the default
 
 `j49-screen` rewrites it when the ring changes something and keeps lines it does not know. `bpd`
@@ -73,7 +73,8 @@ Other state files of `bpd`: `/run/bpd/sht20` (raw temperature, humidity), `/run/
 - Mode heat: demand on at or below setpoint - 0.3 C, off at or above setpoint + 0.3 C.
 - Mode off: demand only for frost protection (on at the threshold, off 1 C above it).
 - No temperature for 10 minutes: demand off, whatever the mode.
-- The boiler is not restarted within 3 minutes of stopping and runs at least 1 minute; switching
+- The heating is not restarted within `min_off` of stopping and runs at least `min_on` (defaults
+  10 s and 0 s, for a valve; **set 180 s and 60 s for a boiler**, "Boiler" on the web page); switching
   off because the mode is off or the sensor is gone is not delayed.
 - The demand goes to the backplate as `0x82 00 <state>`, repeated every 5 s until the backplate
   acknowledges that state with `0x0006 00 <state>` (`backplate-heatlink-flow.md`).
@@ -273,6 +274,40 @@ line per time and temperature and all the days it holds for; comments in the fil
 Checked on a PC against a mosquitto broker (state, discovery JSON, every command, last will) and
 on the device up to the broker's answer. Not checked yet: the entities inside Home Assistant.
 
+## WiFi setup hotspot (j49-wifi)
+
+`j49-wifi` (`tools/j49-wifi`, service `j49-wifi.service`) gives a thermostat without a network a
+way to get one. It looks at `wpa_supplicant` every 5 seconds:
+
+| Situation | What it does |
+|---|---|
+| No network configured (25 s after start) | opens the hotspot |
+| Networks configured, none joined for 5 minutes | opens the hotspot |
+| Hotspot open, a network was added | closes it; the thermostat joins the network |
+| Hotspot open for 10 minutes, networks configured | closes it and tries them again (the router may have been off) |
+| "WiFi hotspot" switched on in Settings on the device | opens the hotspot at once, also when a network is joined (the thermostat leaves that network while the hotspot is open) |
+| "WiFi hotspot" switched off there | closes it; without networks it opens again after 5 minutes |
+| WiFi switched off on the device | no hotspot |
+
+The hotspot is an extra network in the running `wpa_supplicant` (`mode=2`, name
+`J49-setup-` + the last four characters of the MAC address, channel 6, open) and a file
+`/run/systemd/network/70-wlan0-setup.network` that gives `wlan0` the address `192.168.4.1` and a
+DHCP server. Nothing of it is written to the configuration; a restart ends it. When the
+thermostat has no WiFi configuration file at all, `j49-wifi` writes an empty one, because
+`wpa_supplicant` does not start without.
+
+`/run/j49-wifi.state` holds `mode=station|ap`, `ssid=`, `ip=`. The menu row writes `on` or `off`
+into `/run/j49-wifi.want`; `j49-wifi` removes the file when it acted on it. While `mode=ap`, `j49-screen`
+shows a page with the name of the hotspot and the address (a click puts it away), and
+`j49-sleep` does not suspend.
+
+The hotspot has no password. What protects the thermostat is the login of the web page, which
+somebody must confirm on the device. Everything else that listens on the thermostat (SSH) is
+reachable from the hotspot as it is from the home network.
+
+Not yet tried on a device (27 November 2026): the policy and the commands were tested against
+a stand-in for `wpa_supplicant` on a PC.
+
 ## Web page (j49-web)
 
 `j49-web` (`tools/j49-web`, service `j49-web.service`) serves one page on port 80:
@@ -305,7 +340,7 @@ in `/run/j49-web/sessions`: they survive a restart of the service, not a reboot.
   `/var/lib/j49-screen/settings`; `j49-screen` sees the file change within a second and applies it.
 - The temperature correction is `offset=` of the thermostat file, in steps of 0.1.
 - Kind of heating: `min_off=` / `min_on=`. "Ketel" = 180 s / 60 s (a burner must not cycle
-  quickly). "Klep" = 30 s / 0 s, for a district-heating valve, where only chatter has to be
+  quickly). "Klep" = 10 s / 0 s (the default), for a district-heating valve, where only chatter has to be
   avoided. While heat is wanted but `min_off` is not over, the home screen shows `WACHT m:ss`.
 - WiFi: the saved networks by name, the one in use, add and remove. A new network is appended to
   `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf` with a higher priority; the networks that were

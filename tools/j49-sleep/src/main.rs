@@ -4,7 +4,7 @@
 //   j49-sleep on|off   allow or forbid sleeping (same as the switch on the web page and in MQTT)
 //   j49-sleep status   what it is doing and why
 //
-// Sleeping is OFF unless /var/lib/j49/sleep says enabled=on. Even then it only sleeps when:
+// Sleeping is ON unless /var/lib/j49/sleep says enabled=off. It only sleeps when:
 // the panel is asleep, the heating neither runs nor is about to, nobody is logged in over SSH,
 // the web page was not used in the last minute and no login question is open.
 //
@@ -61,7 +61,7 @@ struct Cfg {
 fn read_cfg() -> Cfg {
     let m = kv(SETTINGS);
     Cfg {
-        enabled: m.get("enabled").map(|v| v == "on").unwrap_or(false),
+        enabled: m.get("enabled").map(|v| v == "on").unwrap_or(true),
         idle: num(&m, "idle").unwrap_or(20).clamp(10, 600),
         max: num(&m, "max").unwrap_or(1500).clamp(30, 1500),
         motion: m.get("motion").map(|v| v != "off").unwrap_or(true),
@@ -144,6 +144,10 @@ fn blocker(c: &Cfg, awake_since: Instant) -> Result<u64, &'static str> {
     // network in every sleep, and the next sleep would start before it is back: the device
     // then is unreachable whenever it sleeps (seen 2026-11-26). After 3 minutes without a
     // network it may sleep anyway; then the network is simply not there.
+    // the setup access point is open (j49-wifi): somebody is about to configure WiFi
+    if kv("/run/j49-wifi.state").get("mode").map(|m| m == "ap").unwrap_or(false) {
+        return Err("wifi-setup");
+    }
     let wifi_wanted = num(&kv("/var/lib/j49-screen/settings"), "wifi").unwrap_or(1) != 0;
     if wifi_wanted && own_ip().is_none() && awake_since.elapsed() < Duration::from_secs(180) {
         return Err("wifi");

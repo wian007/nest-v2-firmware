@@ -83,10 +83,18 @@ works. That was tried several times, also with a boot loader that did not start.
 
 ## After the install
 
-- Heating is **off** until you switch it on, and sleeping is off until you enable it.
-- **WiFi.** The first network is set over USB. Connect the thermostat to the computer; it is a
-  serial console (115200 baud; `screen /dev/ttyACM0 115200` on Linux, PuTTY on Windows). Log in
-  as `root` and write the network into `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf`:
+- Heating is **off** until you switch it on. Sleeping is on; switch it off on the web page when you do not want it.
+- **WiFi.** A thermostat without a network opens a WiFi hotspot of its own, about half a
+  minute after it started. Its screen shows the name (`J49-setup-` and four characters) and
+  the address. Connect a phone or laptop to that network (it has no password), open
+  `http://192.168.4.1/`, choose "Log in" and confirm the code on the thermostat with the ring.
+  Add your network in the WiFi block of the page. The hotspot then closes and the thermostat
+  joins your network. The hotspot also opens when the thermostat could not join any of its
+  networks for five minutes. *(Written on 27 November 2026; not yet tried on a device.)*
+
+  The other way is the USB serial console (115200 baud; `screen /dev/ttyACM0 115200` on Linux,
+  PuTTY on Windows). Log in as `root` and write the network into
+  `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf`:
 
       network={
           ssid="the name"

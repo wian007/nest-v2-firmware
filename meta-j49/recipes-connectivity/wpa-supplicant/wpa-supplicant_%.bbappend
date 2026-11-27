@@ -1,4 +1,6 @@
-# Minimal wpa_supplicant for the Nest: nl80211 + WPA2-PSK, internal crypto.
+# Minimal wpa_supplicant for the Nest: nl80211 + WPA2-PSK, internal crypto, and access point
+# mode (CONFIG_AP) for the setup hotspot that j49-wifi opens when there is no network.
+# CONFIG_AP needs pbkdf2_sha1, so CONFIG_NO_WPA_PASSPHRASE cannot be set any more.
 #
 # The default build (full defconfig: EAP, P2P, mesh, D-Bus, OpenSSL) segfaults at start-up on
 # this board, right after the TDLS capability lines, with any config file. The build that works
@@ -20,6 +22,6 @@ CONFIG_IEEE80211W=y
 CONFIG_NO_CONFIG_WRITE=y
 CONFIG_NO_CONFIG_BLOBS=y
 CONFIG_NO_ROAMING=y
-CONFIG_NO_WPA_PASSPHRASE=y
+CONFIG_AP=y
 EOF
 }

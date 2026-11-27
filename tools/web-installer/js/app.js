@@ -3,6 +3,10 @@
 import { romBoot, ROM_FILTER } from "./omap.js";
 import { Dfu, DFU_FILTER } from "./dfu.js";
 import { Service, ByteReader, readBackup, verifyBackup, notAJ49, NEVER_WRITTEN } from "./service.js";
+import { UsbSerial, ACM_FILTER } from "./usbserial.js";
+// ?webusb in the address: use WebUSB for the serial port also where Web Serial exists (to test).
+// Chrome on Android has Web Serial, but only for Bluetooth: its list never shows a USB port.
+const FORCE_WEBUSB = new URLSearchParams(location.search).has("webusb") || /Android/.test(navigator.userAgent);
 
 const $ = id => document.getElementById(id);
 // The languages, each with its flag as a small drawing (flag emoji do not show on Windows).
@@ -167,6 +171,7 @@ async function runRom() {
  *  browser keeps a port whose device has left the bus. */
 async function closePort() {
   if (!port) return;
+  if (port instanceof UsbSerial) { await port.close(); port = null; return; }
   try { await serialIo.rd.cancel(); } catch (e) { /* already ended */ }
   try { serialIo.rd.releaseLock(); serialIo.wr.releaseLock(); } catch (e) { /* already released */ }
   try { await port.close(); } catch (e) { /* the device is gone */ }
@@ -178,12 +183,24 @@ async function openService(id) {
   state(id, "");
   // a port left open by an earlier try is closed first
   await closePort();
-  port = await navigator.serial.requestPort({ filters: [SERIAL_FILTER] });
-  await port.open({ baudRate: 115200, bufferSize: 1 << 20 });
-  const rd = port.readable.getReader(), wr = port.writable.getWriter();
-  serialIo = { rd, wr };
-  const reader = new ByteReader(async () => { const { value, done } = await rd.read(); return done ? null : value; });
-  const svc = new Service(reader, d => wr.write(d), log);
+  let reader, write;
+  if (navigator.serial && !FORCE_WEBUSB) {
+    port = await navigator.serial.requestPort({ filters: [SERIAL_FILTER] });
+    await port.open({ baudRate: 115200, bufferSize: 1 << 20 });
+    const rd = port.readable.getReader(), wr = port.writable.getWriter();
+    serialIo = { rd, wr };
+    reader = new ByteReader(async () => { const { value, done } = await rd.read(); return done ? null : value; });
+    write = d => wr.write(d);
+  } else {
+    // no Web Serial (Chrome on Android): the same port through WebUSB
+    const us = new UsbSerial(await navigator.usb.requestDevice({ filters: [ACM_FILTER] }));
+    await us.open();
+    port = us;
+    log("serial port through WebUSB" + (us.note ? " (" + us.note + ")" : ""));
+    reader = new ByteReader(() => us.pull());
+    write = d => us.write(d);
+  }
+  const svc = new Service(reader, write, log);
   state(id, T("svc.waiting"));
   // count what comes in, so a silent line and a line that only repeats itself can be told apart
   let got = 0; const pull0 = reader.pull;
@@ -344,7 +361,7 @@ for (const b of document.querySelectorAll("#flags button")) {
   try { const t = parse(await getText("lang/" + b.dataset.lang + ".txt")); b.title = t["lang.name"] || b.dataset.lang; b.setAttribute("aria-label", b.title); } catch (e) { b.title = b.dataset.lang; }
 }
 
-const usable = !!(navigator.usb && navigator.serial);
+const usable = !!navigator.usb;
 $("nobrowser").hidden = usable;
 $("insecure").hidden = window.isSecureContext;
 $("windows").hidden = !/Windows/.test(navigator.userAgent);

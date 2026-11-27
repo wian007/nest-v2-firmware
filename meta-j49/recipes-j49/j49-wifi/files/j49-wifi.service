@@ -1,0 +1,11 @@
+[Unit]
+Description=J49 WiFi setup: a hotspot when the thermostat has no network (j49-wifi)
+After=wpa_supplicant@wlan0.service systemd-networkd.service j49-wlan-reprobe.service
+
+[Service]
+ExecStart=/usr/bin/j49-wifi
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

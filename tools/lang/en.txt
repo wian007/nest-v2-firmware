@@ -63,6 +63,12 @@ screen.backplate=BACKPLATE
 screen.install=INSTALL
 screen.error=ERROR
 screen.thermostat=THERMOSTAT
+screen.hotspot=WIFI HOTSPOT
+screen.wifi_setup=WIFI SETUP
+screen.connect_to=CONNECT A PHONE OR LAPTOP TO
+screen.then_open=THEN OPEN IN A BROWSER
+screen.confirm_here=LOG IN THERE AND CONFIRM HERE
+screen.click_for_dial=CLICK = DIAL
 screen.theme=THEME
 
 # --- the web page (j49-web) ---
@@ -169,7 +175,7 @@ web.aria.ringrev=ring counts
 web.aria.volume=volume
 web.wifi.switch.ask=The thermostat switches to the new network. This page then loses the connection. Go on?
 web.restart.ask=The thermostat restarts. That takes about two minutes; the heating is off meanwhile. Go on?
-web.kind.help=Valve (district heating): 30 s off, 0 s on. Boiler: 180 s off, 60 s on.
+web.kind.help=Valve (district heating): 10 s off, 0 s on. Boiler: 180 s off, 60 s on.
 web.mqtt.bad_credentials=wrong user name or password
 web.mqtt.not_authorized=not allowed: a user name and a password are needed
 web.mqtt.saved=Broker saved. Connecting again.
@@ -178,7 +184,8 @@ web.schedule.bad_temp=The temperature must be between 9 and 32.
 web.login.refused=Refused on the thermostat, or too late.
 web.state.no_backplate=No backplate: no heating
 web.why.bpd=no contact with the backplate service
-web.sleep.never=The device always stays awake.
+web.sleep.never=The device always stays awake. On a backplate without a C wire the battery then runs empty within a night.
+web.sleep.warn=Without sleep the thermostat uses more than the backplate can supply: the battery runs empty within a night and the thermostat goes off. Switch sleep off?
 web.schedule.no_days=A time point has no days.
 web.password.keep=set; leave empty to keep it
 web.sleep.count=sleeps; the last one

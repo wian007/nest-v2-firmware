@@ -386,9 +386,9 @@ document.querySelectorAll("[data-min]").forEach(b => b.onclick = () => {
   const [key, d] = b.dataset.min.split(",");
   dev(key + "=" + Math.min(600, Math.max(0, Math.round(num(st.device[key], 0)) + parseInt(d))));
 });
-$("sl-off").onclick = () => dev("sleep=off");
+$("sl-off").onclick = () => { if (confirm(T("sleep.warn"))) dev("sleep=off"); };
 $("sl-on").onclick = () => dev("sleep=on");
-$("k-valve").onclick = () => dev("min_off=30\nmin_on=0");
+$("k-valve").onclick = () => dev("min_off=10\nmin_on=0");
 $("k-boiler").onclick = () => dev("min_off=180\nmin_on=60");
 ["w-ssid", "w-pass"].forEach(id => $(id).oninput = () => wifiDirty = true);
 $("w-add").onclick = async () => {

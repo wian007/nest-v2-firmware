@@ -21,6 +21,7 @@ IMAGE_INSTALL:append = " \
     j49-mqtt \
     j49-web \
     j49-sleep \
+    j49-wifi \
     j49-dfu \
     j49-config \
 "

@@ -305,10 +305,11 @@ const CMD_SWITCH: u16 = 0x0082;
 const RSP_ACK_SWITCH: u16 = 0x0006;
 const AWAY_DEFAULT_C: f32 = 15.0; // target while away, until away_temp= says otherwise
 const HYSTERESIS_C: f32 = 0.3; // on below setpoint-0.3, off above setpoint+0.3
-// Defaults fit a boiler (no restart within 3 minutes, burn at least 1 minute). min_off= and
-// min_on= in the thermostat file change them; a district-heating valve needs next to nothing.
-const MIN_OFF: Duration = Duration::from_secs(180);
-const MIN_ON: Duration = Duration::from_secs(60);
+// Defaults fit a district-heating valve, where only chatter has to be avoided: 10 s off before
+// a new start, no minimum time on. min_off= and min_on= in the thermostat file change them; a
+// boiler needs more (the web page's "Boiler" sets 180 s and 60 s: a burner must not cycle quickly).
+const MIN_OFF: Duration = Duration::from_secs(10);
+const MIN_ON: Duration = Duration::from_secs(0);
 const MIN_TIME_MAX_S: u64 = 600;
 const SENSOR_MAX_AGE_S: u64 = 600; // no temperature for 10 minutes: heat off
 const FROST_DEFAULT_C: f32 = 5.0; // frost protection threshold; heats up to 1 C above it
@@ -502,7 +503,7 @@ impl Thermostat {
     }
 }
 fn read_thermostat() -> Thermostat {
-    let mut t = Thermostat { heat: false, setpoint: 20.0, offset: -3.0, frost: FROST_DEFAULT_C, schedule: false, away: false, away_temp: AWAY_DEFAULT_C, min_off: MIN_OFF, min_on: MIN_ON };
+    let mut t = Thermostat { heat: false, setpoint: 20.0, offset: -2.0, frost: FROST_DEFAULT_C, schedule: false, away: false, away_temp: AWAY_DEFAULT_C, min_off: MIN_OFF, min_on: MIN_ON };
     let mut tz = DEFAULT_TZ.to_string();
     if let Ok(s) = std::fs::read_to_string("/var/lib/j49/thermostat") {
         for l in s.lines() {

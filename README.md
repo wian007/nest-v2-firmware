@@ -23,9 +23,9 @@ it controls the heating by itself, and it is reached over the home network.
 | **Screen** | A dial like the thermostat card of Home Assistant: target and room temperature, what the heating does, clock, WiFi. The ring sets the temperature; a click opens a menu for mode, schedule, away, status and settings. English or Dutch. |
 | **Web page** | `http://<device>/`: temperature, away, schedule editor, MQTT broker, WiFi networks, device settings. Login has no password: the browser shows a code and somebody confirms it on the device with the ring. |
 | **Home Assistant** | MQTT with discovery: a climate entity, sensors, the schedule per day and as JSON, away, volume, brightness, sleep state, tunes on the piezo. |
-| **Sleep** | Suspends when idle. The backplate wakes it (timer, temperature, motion); the WiFi chip wakes it for MQTT, the web page and SSH. Off unless enabled. |
+| **Sleep** | Suspends when idle. The backplate wakes it (timer, temperature, motion); the WiFi chip wakes it for MQTT, the web page and SSH. On unless switched off. |
 
-Heating is off until it is switched on (`mode=off`), and sleeping is off until it is enabled.
+Heating is off until it is switched on (`mode=off`). Sleeping is on unless it is switched off.
 
 ## Status
 
@@ -47,6 +47,7 @@ runs in general. Each document below says what was checked and what was not.
 | `j49-web` | Web page on port 80 | [thermostat](docs/thermostat.md#web-page-j49-web) |
 | `j49-mqtt` | MQTT and Home Assistant discovery | [thermostat](docs/thermostat.md#home-assistant-j49-mqtt), [cards](docs/home-assistant.md) |
 | `j49-sleep` | Decides when to suspend | [sleep](docs/sleep-j49.md) |
+| `j49-wifi` | Opens a WiFi hotspot for setup when there is no network | [thermostat](docs/thermostat.md#wifi-setup-hotspot-j49-wifi) |
 | `j49-dfu` | Reboots into the U-Boot download mode | [updating](tools/dfu-install/update-from-linux.md) |
 
 They are small Rust programs without a framework, and they do not call each other. The interface
@@ -114,6 +115,7 @@ tools/j49-screen     display, ring, sound
 tools/j49-web        web page
 tools/j49-mqtt       MQTT / Home Assistant
 tools/j49-sleep      sleep manager
+tools/j49-wifi       WiFi setup hotspot
 tools/j49-dfu        reboot into DFU
 tools/j49-ncp        read-only tool for the 802.15.4 radio's bootloader
 tools/lang          texts per language (screen and web page)
