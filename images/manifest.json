@@ -1,8 +1,8 @@
 {
   "xload": {"file": "x-load.bin", "size": 27876, "sha256": "aee635f0d09180677fa86fea6797b1ad36f64b112f7eea3a5572ab7f28fd5c21"},
   "ubootram": {"file": "u-boot.bin", "size": 246572, "sha256": "52aa039f5b36d8cd5108e6bbb69f5dbd60a5c3750404c8d3fbc721d53721ccf0"},
-  "service": {"file": "nest-service-uImage", "size": 2829228, "sha256": "a3f01153d39df3d1f0e014ed352a2e9db82cb9d61cb8ce2be594101dedafe233"},
+  "service": {"file": "nest-service-uImage", "size": 2831164, "sha256": "e2e6e713325b313a8a0343bc3e5d475ee952dc3aa74eabcf4318f8d202715860"},
   "uboot": {"file": "u-boot-nest-j49.uimg", "size": 548584, "sha256": "ae7a0fd748eb7671626593a56a00396f8494296d0f76a4f2528f29444d221cd2"},
-  "kernel": {"file": "uImage-j49-a", "size": 4944557, "sha256": "690112ac7540e7d8fb1122b9939093905cf81f952f65f78d3416707ba7a7ab4a"},
-  "rootfs": {"file": "j49-image-nest-j49.rootfs.jffs2", "size": 21102816, "sha256": "6d2f664b287077e6649662baccffbdbfbae8bc77381e820f6024574619cec2e9"}
+  "kernel": {"file": "uImage-j49-a", "size": 4943541, "sha256": "01dc8afa6576925a4c9230f7aede5db3d16fe82a4f22848a7ca4e197251380a2"},
+  "rootfs": {"file": "j49-image-nest-j49.rootfs.jffs2", "size": 21548920, "sha256": "c2df34406754392b3ec0c8c572ebd2c1b3fe1e77a859522319f99744ebb19ba0"}
 }

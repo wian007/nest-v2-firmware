@@ -57,6 +57,11 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding
 a{color:var(--info)}
 #thanks li{font-size:14px}
 [hidden]{display:none!important}
+#s-support summary { cursor: pointer; font-weight: 600; }
+.scroll { overflow-x: auto; }
+table.sup { border-collapse: collapse; width: 100%; margin: 12px 0 4px; font-size: .95em; }
+table.sup th, table.sup td { text-align: left; vertical-align: top; padding: 6px 10px 6px 0; border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
+table.sup tbody th { font-weight: 600; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -68,6 +73,15 @@ a{color:var(--info)}
 
 <section class="warn" id="nobrowser" hidden><p data-t="nobrowser"></p></section>
 <section class="warn" id="insecure" hidden><p data-t="insecure"></p></section>
+
+<section id="s-support">
+  <details>
+    <summary data-t="sup.title"></summary>
+    <p data-t="sup.intro"></p>
+    <div class="scroll"><table class="sup"><thead><tr><th data-t="sup.h.where"></th><th data-t="sup.h.state"></th><th data-t="sup.h.note"></th></tr></thead><tbody><tr><th data-t="sup.linux"></th><td data-t="sup.linux.s"></td><td data-t="sup.linux.n"></td></tr><tr><th data-t="sup.android"></th><td data-t="sup.android.s"></td><td data-t="sup.android.n"></td></tr><tr><th data-t="sup.windows"></th><td data-t="sup.windows.s"></td><td data-t="sup.windows.n"></td></tr><tr><th data-t="sup.mac"></th><td data-t="sup.mac.s"></td><td data-t="sup.mac.n"></td></tr><tr><th data-t="sup.chromeos"></th><td data-t="sup.chromeos.s"></td><td data-t="sup.chromeos.n"></td></tr><tr><th data-t="sup.other"></th><td data-t="sup.other.s"></td><td data-t="sup.other.n"></td></tr></tbody></table></div>
+    <p class="note" data-t="sup.cable"></p>
+  </details>
+</section>
 
 <section class="warn" id="s-warn">
   <h2 data-t="warn.title"></h2>

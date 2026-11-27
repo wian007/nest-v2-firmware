@@ -5,7 +5,7 @@ title=J49 installer
 subtitle=Our own software on a Nest Learning Thermostat (2nd generation), from the browser
 language=Language
 
-nobrowser=This browser cannot reach USB devices. Use Chrome or Edge on a computer (Windows, Linux, macOS or ChromeOS).
+nobrowser=This browser cannot reach USB devices. Use Chrome or Edge on a computer (Windows, Linux, macOS or ChromeOS), or Chrome on an Android phone.
 insecure=The page must be opened over https or from localhost; otherwise the browser does not allow USB.
 
 warn.title=Before you start
@@ -91,7 +91,7 @@ restore.done=The backup is back. The thermostat restarts into the stock firmware
 restore.other=This backup has other partitions than this thermostat. It is not written.
 
 done.title=Done
-done.install=When the screen of the thermostat shows the dial, it runs the J49 software. Heating is off until you switch it on. For WiFi, see the installation guide: the first network is set over the USB serial console.
+done.install=When the screen of the thermostat shows the dial, it runs the J49 software. Heating is off until you switch it on. For WiFi: the thermostat opens a hotspot of its own and shows on its screen what to do (see the installation guide).
 done.backup=The backup is made. Nothing on the thermostat was changed. Take it off USB and hold the ring 10 seconds to restart it.
 done.restore=The thermostat is back on the stock firmware.
 
@@ -117,3 +117,27 @@ thanks.note=None of them is responsible for this installer, and this project is 
 thanks.more=All credits
 thanks.images=The image files this page loads are free software. Who made each one, its licence and where its source is:
 thanks.images.link=the list
+sup.title=Which browsers and devices work
+sup.intro=The installer needs a browser that can reach USB devices (WebUSB): Chrome, Edge or another browser built on Chromium. Firefox and Safari cannot. The state below is of 27 November 2026.
+sup.h.where=Where
+sup.h.state=State
+sup.h.note=Good to know
+sup.linux=Linux, Chrome or Chromium
+sup.linux.s=Works: a full install and a restore were done with it
+sup.linux.n=Your user must be allowed to open USB devices and serial ports (on many systems: the groups plugdev and dialout, or a udev rule).
+sup.android=Android phone or tablet, Chrome
+sup.android.s=Works as far as tried: start mode and the connection to the thermostat
+sup.android.n=The phone powers the thermostat: use a USB-C to micro-USB cable or an OTG adapter. The backup (about 130 MB) is kept in memory and offered as a download at the end.
+sup.windows=Windows 10 or 11, Chrome or Edge
+sup.windows.s=Not tried
+sup.windows.n=Windows has no driver for the start mode of the thermostat (step 2) and for the download mode (step 6). The WinUSB driver must be installed for both with Zadig first; see the note below the warnings.
+sup.mac=macOS, Chrome or Edge
+sup.mac.s=Not tried
+sup.mac.n=No drivers are needed; it is expected to work.
+sup.chromeos=ChromeOS
+sup.chromeos.s=Not tried
+sup.chromeos.n=No drivers are needed; it is expected to work.
+sup.other=iPhone and iPad; Firefox; Safari
+sup.other.s=Does not work
+sup.other.n=These have no WebUSB. On an iPhone or iPad no browser has it.
+sup.cable=Use a USB cable that carries data: many micro-USB cables only charge. Connect directly, without a hub, when something does not work.

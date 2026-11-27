@@ -35,9 +35,9 @@ project.
 
 | File | Size | sha256 |
 |---|---|---|
-| `j49-image-nest-j49.rootfs.jffs2` | 21102816 | `6d2f664b287077e6649662baccffbdbfbae8bc77381e820f6024574619cec2e9` |
-| `nest-service-uImage` | 2829228 | `a3f01153d39df3d1f0e014ed352a2e9db82cb9d61cb8ce2be594101dedafe233` |
+| `j49-image-nest-j49.rootfs.jffs2` | 21548920 | `c2df34406754392b3ec0c8c572ebd2c1b3fe1e77a859522319f99744ebb19ba0` |
+| `nest-service-uImage` | 2831164 | `e2e6e713325b313a8a0343bc3e5d475ee952dc3aa74eabcf4318f8d202715860` |
 | `u-boot.bin` | 246572 | `52aa039f5b36d8cd5108e6bbb69f5dbd60a5c3750404c8d3fbc721d53721ccf0` |
 | `u-boot-nest-j49.uimg` | 548584 | `ae7a0fd748eb7671626593a56a00396f8494296d0f76a4f2528f29444d221cd2` |
-| `uImage-j49-a` | 4944557 | `690112ac7540e7d8fb1122b9939093905cf81f952f65f78d3416707ba7a7ab4a` |
+| `uImage-j49-a` | 4943541 | `01dc8afa6576925a4c9230f7aede5db3d16fe82a4f22848a7ca4e197251380a2` |
 | `x-load.bin` | 27876 | `aee635f0d09180677fa86fea6797b1ad36f64b112f7eea3a5572ab7f28fd5c21` |
