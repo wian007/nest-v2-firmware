@@ -7,10 +7,10 @@ switches real heating.
 **Status of this guide (27 November 2026).** Done on thermostats so far:
 
 - A full install from the page, from the ring gesture to the running system, with the WiFi
-  setup hotspot coming up after it.
+  setup hotspot coming up after it and the home network added through it.
 - Putting a backup back from the page: a thermostat on which an earlier install had failed was
   brought back to the stock firmware with its backup.
-- Steps from Chrome on an Android phone.
+- A full install from Chrome on an Android phone.
 - The same on a second thermostat that still had all its stock data. An earlier version of
   the installer failed there: the new system cannot read the partitions the stock firmware
   wrote (another error correction layout). The installer now fetches the WiFi calibration and
