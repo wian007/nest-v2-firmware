@@ -37,10 +37,16 @@ def write_part(p, name, frames, mode):
     ans = line(p)
     if not ans.startswith("READY"):
         return ans
+    chunk = int(ans.split()[2])
     crc = 0
     for data in frames:
-        p.stdin.write(b"E" if data is None else b"D" + data)
-        p.stdin.flush()
+        if data is None:
+            p.stdin.write(b"E"); p.stdin.flush()
+        else:
+            p.stdin.write(b"D"); p.stdin.flush()
+            for at in range(0, len(data), chunk):      # in pieces, each answered with "+"
+                p.stdin.write(data[at:at + chunk]); p.stdin.flush()
+                assert p.stdout.read(1) == b"+"
         ans = p.stdout.read(1)
         assert ans in (b".", b"b"), ans
         if data is not None and ans == b".":

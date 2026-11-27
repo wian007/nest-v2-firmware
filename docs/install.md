@@ -4,14 +4,14 @@ How to put the J49 software on a Nest Learning Thermostat of the 2nd generation,
 back. Read the [disclaimer](../DISCLAIMER.md) first: this replaces the firmware and the device
 switches real heating.
 
-**Status of this guide (27 November 2026).** The steps of the install are the ones we did by
-hand with command-line tools, several times, on one thermostat. The installer page was tried on
-that thermostat up to and including a full backup: the loaders, the service kernel with our own
-screen, the check that it is a 2nd generation thermostat, and a backup of the whole flash
-memory that checks out (256 MB in about 9 minutes). **Not yet done from the page on a device:**
-writing the boot loader, installing the system, and putting a backup back. Until this paragraph
-says otherwise, expect to need the command-line route in
-[tools/dfu-install/README.md](../tools/dfu-install/README.md) when something does not work.
+**Status of this guide (27 November 2026).** The install described here was done on one
+thermostat, from start to a running system. From the installer page itself: the loaders, the
+service kernel with our own screen, the check that it is a 2nd generation thermostat, a backup
+of the whole flash memory that checks out (256 MB in about 9 minutes), writing the boot loader,
+and writing the kernel. The last step, sending the root file system, was done on that
+thermostat with the same protocol from a PC; **the page has not yet done that step itself in
+its present form.** Putting a backup back was not yet done on a device. When something does not
+work, the ring gesture always brings the thermostat back to step 2.
 
 ## What you need
 
@@ -60,14 +60,21 @@ It has three jobs: **Install** (backup, then install), **Backup only** (changes 
 4. **Backup.** The page reads the whole flash memory (256 MB, less in the file because empty
    blocks are not stored) into one `.j49backup` file and checks it. **Keep this file.** It
    holds the firmware of *your* thermostat, with its keys and its WiFi data: do not publish it.
-5. **Boot loader.** Our U-Boot is written into both boot loader partitions and read back. From
-   here on the thermostat does not start the stock firmware any more. It restarts; the screen
-   stays dark.
-6. **System.** The thermostat is now a USB device "USB download gadget". Select it. The page
-   sends the installer and the root file system (about 27 MB) into RAM; the thermostat then
-   writes it to its flash memory and shows the progress on its own screen (a few minutes).
-   When it is done it comes back on USB by itself and the page writes the kernel. The
-   thermostat then starts the J49 software.
+5. **Boot loader.** Our U-Boot is written into both boot loader partitions and read back, and
+   the partition for the system is erased. From here on the thermostat does not start the
+   stock firmware any more. It restarts; the screen stays dark.
+6. **Kernel.** The thermostat is now a USB device "USB download gadget". Select it. The page
+   sends the kernel, which U-Boot writes to the flash memory. The thermostat restarts and
+   starts that kernel. The kernel finds no system and waits for the installer: the screen shows
+   "J49 INSTALLER" again.
+7. **System.** The thermostat is a USB serial port again ("Gadget Serial"). Select it. The page
+   sends the root file system (about 21 MB); the thermostat writes it block by block and reads
+   every block back, with the progress on the page and on its own screen. That takes under a
+   minute. The thermostat then restarts and starts the J49 software.
+
+The kernel that is installed starts a small program of ours first, at every start. When the
+partition for the system holds a system, it starts that. When it is empty or damaged, the
+thermostat waits in installer mode, and step 7 can be done again without the ring gesture.
 
 If a step fails, the page says so and the step can be done again. The thermostat cannot be
 bricked by a failed step as long as the first loader partition (`ipl`) is intact, and nothing
@@ -112,7 +119,7 @@ yourself:
 | `x-load.bin`, `u-boot.bin` | The loaders of the USB boot chain | [tools/dfu-install/nest-dfu](../tools/dfu-install/nest-dfu/README.md) |
 | `nest-service-uImage` | Rescue kernel with the service program `nandio` | `tools/dfu-install/installer/build-service-kernel.sh` |
 | `u-boot-nest-j49.uimg` | Our U-Boot 2024.07 | `tools/dfu-install/uboot/build.sh` |
-| `zImage-installer`, `uImage-j49-a` | Installer kernel and the kernel | `tools/dfu-install/installer/build.sh` |
+| `uImage-j49-a` | The kernel, with `nandio` as its first program | `tools/dfu-install/installer/build.sh` |
 | `j49-image-nest-j49.rootfs.jffs2` | The root file system | the Yocto build (README, "Build") |
 
 ## How it works, for who wants to check it
@@ -125,6 +132,8 @@ yourself:
 - `tools/web-installer/js/service.js`: the browser side, and the format of the backup file.
   `tools/dfu-install/nandio/j49backup.py` checks a backup file on a PC and converts it to and
   from plain images; `probe.py` talks to the service without the browser.
-- `tools/web-installer/js/dfu.js`: USB DFU 1.1 download to our U-Boot.
+- `tools/web-installer/js/dfu.js`: USB DFU 1.1 download to our U-Boot (the kernel only).
+- Why the root file system does not go through U-Boot, and the other things the first installs
+  taught, are in the commit messages of 27 November 2026 and at the top of `nandio.c`.
 - `node tools/web-installer/test/run.mjs tools/dfu-install/nandio/nandio-host` runs the
   browser code against a simulated ROM, a simulated DFU device and the real `nandio`.

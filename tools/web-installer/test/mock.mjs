@@ -46,13 +46,20 @@ export class MockRom {
 export class MockDfu {
   constructor(names, transfer = 4096) {
     this.names = names; this.transfer = transfer; this.alt = 0; this.state = 2; this.data = {}; this.cur = []; this.detached = false; this.polls = 0;
-    this.configuration = { interfaces: [{ interfaceNumber: 0, alternates: names.map((n, i) => ({ alternateSetting: i, interfaceClass: 0xfe, interfaceSubclass: 1, interfaceName: n })) }] };
+    this.configuration = { interfaces: [{ interfaceNumber: 0, alternates: names.map((n, i) => ({ alternateSetting: i, interfaceClass: 0xfe, interfaceSubclass: 1, interfaceName: null })) }] };
   }
   async open() {} async close() {} async claimInterface() {} async selectConfiguration() {}
   async selectAlternateInterface(i, alt) { this.alt = alt; }
   async controlTransferIn(setup, len) {
-    if (setup.requestType === "standard") {   // configuration descriptor with the DFU functional descriptor
-      return ok(Uint8Array.of(9, 2, 27, 0, 1, 1, 0, 0x80, 50, 9, 4, 0, 0, 0, 0xfe, 1, 2, 0, 9, 0x21, 0x0d, 0, 0, this.transfer & 255, this.transfer >> 8, 0x10, 1));
+    if (setup.requestType === "standard") {
+      if (setup.value >> 8 === 3) {            // a string descriptor: the name of a target
+        const name = this.names[(setup.value & 255) - 4] || "";
+        return ok(Uint8Array.from([2 + 2 * name.length, 3, ...[...name].flatMap(c => [c.charCodeAt(0), 0])]));
+      }
+      // configuration descriptor: one interface descriptor per target (string index 4, 5, ...),
+      // then the DFU functional descriptor
+      const alts = this.names.flatMap((_, i) => [9, 4, 0, i, 0, 0xfe, 1, 2, 4 + i]);
+      return ok(Uint8Array.from([9, 2, 0, 0, 1, 1, 0, 0x80, 50, ...alts, 9, 0x21, 0x0d, 0, 0, this.transfer & 255, this.transfer >> 8, 0x10, 1]));
     }
     if (setup.request !== 3) throw new Error("unexpected request " + setup.request);
     // one busy answer after every block, then the real state

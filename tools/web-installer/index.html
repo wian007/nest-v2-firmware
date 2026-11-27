@@ -22,6 +22,7 @@ section.active{border-color:var(--accent)}
 section.done h2::after{content:" \2713";color:var(--ok)}
 section.later{opacity:.45}
 section.later .body{display:none}
+#steps h2{cursor:pointer}
 ol,ul{margin:0 0 12px;padding-left:22px}
 li{margin:4px 0}
 p{margin:0 0 12px}
@@ -117,8 +118,14 @@ a{color:var(--info)}
 
 <section id="s-dfu"><h2 data-t="dfu.title"></h2><div class="body">
   <p data-t="dfu.1"></p>
-  <div class="actions"><button class="primary" id="dfu-go" data-t="dfu.button"></button><button class="link" id="dfu-again" data-t="dfu.reconnect" hidden></button></div>
+  <div class="actions"><button class="primary" id="dfu-go" data-t="dfu.button"></button></div>
   <div class="bar"><i id="dfu-bar"></i></div><div class="state" id="dfu-state"></div>
+</div></section>
+
+<section id="s-sys"><h2 data-t="sys.title"></h2><div class="body">
+  <p data-t="sys.1"></p>
+  <div class="actions"><button class="primary" id="sys-go" data-t="sys.button"></button></div>
+  <div class="bar"><i id="sys-bar"></i></div><div class="state" id="sys-state"></div>
 </div></section>
 
 <section id="s-restore"><h2 data-t="restore.title"></h2><div class="body">

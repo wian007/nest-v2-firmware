@@ -31,7 +31,6 @@ files.xload=First loader (x-load.bin)
 files.ubootram=Loader U-Boot for RAM (u-boot.bin)
 files.service=Service kernel (nest-service-uImage)
 files.uboot=Our U-Boot (u-boot-nest-j49.uimg)
-files.installer=Installer kernel (zImage-installer)
 files.rootfs=Root file system (j49-image .jffs2)
 files.kernel=Kernel (uImage-j49-a)
 files.backupfile=Backup file to restore (.j49backup)
@@ -65,20 +64,24 @@ backup.errors=WARNING: {n} blocks could not be read without errors. The backup m
 backup.skip=I have a backup of this thermostat already; skip this step
 
 uboot.title=5. Write the boot loader
-uboot.1=Our U-Boot goes into both boot loader partitions. From here on the thermostat no longer starts the stock firmware.
+uboot.1=Our U-Boot goes into both boot loader partitions, and the partition for the system is erased. From here on the thermostat no longer starts the stock firmware.
 uboot.button=Write the boot loader
 uboot.writing=Writing {name}
 uboot.done=Written and read back. The thermostat restarts into our U-Boot.
 
 dfu.title=6. Install the system
-dfu.1=The screen is dark now: that is normal. Click the button and choose "USB download gadget" in the list.
+dfu.1=The screen is dark now: that is normal. Click the button and choose "USB download gadget" in the list. The page sends the kernel.
 dfu.button=Connect and install
-dfu.stage2=Sending the installer and the system ({mb} MB)
-dfu.installing=The thermostat writes the system to its flash memory. Its screen shows the progress; this takes a few minutes. Leave it connected. When it is done it shows up on USB again by itself.
-dfu.reconnect=If nothing happens after the thermostat is done, click here and choose "USB download gadget" again
-dfu.stage3=Writing the kernel
-dfu.done=Installed. The thermostat starts our software.
 
+dfu.sending=Sending {name}
+dfu.sent=Sent. The thermostat restarts and starts the new kernel; after about ten seconds its screen shows "J49 INSTALLER" again.
+sys.title=7. Write the system
+sys.1=The thermostat restarts and is then a USB serial port again. Wait for the button, click it and choose "Gadget Serial". The page then sends the root file system; the thermostat writes it to its flash memory and reads every block back.
+sys.soon=The thermostat is restarting. You can go on in {n} seconds.
+sys.button=Connect and write the system
+sys.writing=Writing the root file system
+sys.done=Written and read back. The thermostat restarts and starts the J49 software by itself.
+panel.system=SYSTEM
 restore.title=4. Put the backup back
 restore.1=Every partition of the backup file is written back, except the first loader, which the install never changes.
 restore.check=Checking the backup file
@@ -88,7 +91,7 @@ restore.done=The backup is back. The thermostat restarts into the stock firmware
 restore.other=This backup has other partitions than this thermostat. It is not written.
 
 done.title=Done
-done.install=The thermostat now runs the J49 software. Heating is off until you switch it on. For WiFi, see the installation guide: the first network is set over the USB serial console.
+done.install=When the screen of the thermostat shows the dial, it runs the J49 software. Heating is off until you switch it on. For WiFi, see the installation guide: the first network is set over the USB serial console.
 done.backup=The backup is made. Nothing on the thermostat was changed. Take it off USB and hold the ring 10 seconds to restart it.
 done.restore=The thermostat is back on the stock firmware.
 

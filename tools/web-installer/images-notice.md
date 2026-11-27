@@ -21,8 +21,7 @@ NestDFUAttack (2014), which found that the boot ROM of the thermostat accepts co
 | File | What | Licence | Source |
 |---|---|---|---|
 | `u-boot-nest-j49.uimg` | U-Boot 2024.07 with our board support | GPL-2.0-or-later | <https://source.denx.de/u-boot/u-boot> plus `tools/dfu-install/uboot` in this project |
-| `uImage-j49-a` | Linux 6.6 with our device tree and patches | GPL-2.0 | <https://kernel.org> plus `meta-j49/recipes-kernel` in this project |
-| `zImage-installer` | The same kernel with a small initramfs that writes the root file system | GPL-2.0; our programs MIT | as above, plus `tools/dfu-install/installer` |
+| `uImage-j49-a` | Linux 6.6 with our device tree and patches, and `nandio` as its first program: it starts the system, or waits for the installer when there is none | GPL-2.0; `nandio` MIT (linked with musl, MIT) | <https://kernel.org> plus `meta-j49/recipes-kernel` and `tools/dfu-install` in this project |
 | `*.rootfs.jffs2` | The root file system, built with the Yocto Project: many packages, each under its own licence (the build writes the list to `build/tmp/deploy/licenses`) | various free software licences | `meta-j49` and `kas/nest-j49.yml` in this project build it from the sources of each package |
 
 This project: <https://github.com/wian007/nest-v2-firmware> (our own code MIT). To get the

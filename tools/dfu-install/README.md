@@ -1,5 +1,12 @@
 # dfu-install -- a DFU installer for our OS on the Nest J49
 
+> **Read first (27 November 2026).** This file describes the first, command-line route. Its
+> stage 2 (the root file system through a DFU window in RAM, `stage2.sh`) does not work
+> reliably: the window runs through U-Boot's own memory, and U-Boot resets after a DFU detach
+> instead of starting a kernel from RAM. The route that works is the one of the installer page:
+> [docs/install.md](../../docs/install.md), with `nandio/` and `installer/build.sh` here. The
+> rest of this file is kept for the hardware notes in it.
+
 ## Status (2026-11-23) -- read this first
 
 **The whole chain works on hardware: our U-Boot in NAND boots our Linux 6.6 + Yocto rootfs from NAND by itself.**

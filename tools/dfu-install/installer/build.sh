@@ -56,42 +56,19 @@ fi
 [ -f "$JFFS2" ] || { echo "missing jffs2 $JFFS2" >&2; exit 1; }
 
 # ---------------------------------------------------------------- initramfs
-BB=$(nix build --no-link --print-out-paths \
-      nixpkgs#pkgsCross.armv7l-hf-multiplatform.pkgsStatic.busybox)/bin/busybox
+# One program: nandio (../nandio/nandio.c) as /init, static, built with the musl cross compiler
+# of the flake dev shell. At every start it either hands over to the system in the root
+# partition or, when there is none, waits for the installer on the USB serial gadget.
 ROOT="$WORK/installer-root"; rm -rf "$ROOT"
-mkdir -p "$ROOT"/{bin,dev,proc,sys,run,mnt,root}
-cp "$BB" "$ROOT/bin/busybox"; chmod +x "$ROOT/bin/busybox"
-ln -sf busybox "$ROOT/bin/sh"
-for a in mount umount gunzip cat head printf sleep reboot sync; do
-    ln -sf busybox "$ROOT/bin/$a"
-done
-
-# root0 image length for exact progress -- templated into the init. The
-# jffs2 is NOT embedded: ~22 MB is nearly incompressible and would blow the
-# 64 MB RAM budget at kernel decompression time. stage 2 downloads it into
-# DRAM at 0x82000000 (second DFU alt) and the init streams it from /dev/mem.
-IMGLEN=$(stat -L -c %s "$JFFS2")
-sed "s/@ROOT0_IMG_LEN@/$IMGLEN/" "$HERE/init" > "$ROOT/init"
-chmod +x "$ROOT/init"
-printf '%s' "$IMGLEN" > "$WORK/rootfs.jffs2.len"
-echo "root0 image: $IMGLEN bytes (DFU RAM alt at 0x82000000)"
-
-# device-side binaries (Rust, static musl armv7 -- project convention; the
-# flake dev shell supplies the target std and the static linker)
+mkdir -p "$ROOT"/{dev,proc,sys,newroot}
 ( cd "$NEST_YOCTO" && nix develop --command bash -eu -c '
-    cd tools/j49-screen
-    cargo build --release --quiet
-    cp target/armv7-unknown-linux-musleabihf/release/j49-screen "'"$ROOT"'/bin/j49-screen"
-    rustc --target armv7-unknown-linux-musleabihf -O \
-        -C target-feature=+crt-static \
-        -C linker="$CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER" \
-        -o "'"$ROOT"'/bin/nest-mtdflash" "'"$HERE"'/mtdflash.rs"
-    CROSSSTRIP="${CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER%cc}strip"
-    "$CROSSSTRIP" "'"$ROOT"'/bin/j49-screen" "'"$ROOT"'/bin/nest-mtdflash"
+    CC="$CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER"
+    "$CC" -O2 -Wall -static -o "'"$ROOT"'/init" tools/dfu-install/nandio/nandio.c -lm
+    "${CC%cc}strip" "'"$ROOT"'/init"
 ' )
-
+ls -la "$ROOT/init"
 nix shell nixpkgs#cpio nixpkgs#gzip nixpkgs#findutils --command bash -c "
-  cd '$ROOT' && find . -print0 | cpio --null -ov --format=newc 2>/dev/null \
+  cd '$ROOT' && find . -print0 | LC_ALL=C sort -z | cpio --null -o --format=newc 2>/dev/null \
     | gzip -9 > '$WORK/installer-initramfs.cpio.gz'
 "
 
@@ -113,11 +90,12 @@ nix shell \
     MK="make -C '"$KSRC"' O='"$KOUT"' ARCH=arm CROSS_COMPILE='"$CROSS"' -j$(nproc)"
     CONF='"$KOUT"'/.config
 
-    # (a) production kernel for the A slot (boot0 + root0): initramfs OFF, built-in cmdline
-    #     roots on root0. The built-in CONFIG_CMDLINE is appended AFTER U-Boot bootargs and the
+    # (a) the kernel for the A slot (boot0 + root0), with nandio as its initramfs: it starts the
+    #     system in the root partition named on the command line, or waits for the installer
+    #     when there is none. The built-in cmdline roots on root0. The built-in CONFIG_CMDLINE is appended AFTER U-Boot bootargs and the
     #     last root= wins, so root=/dev/mtdblock6 has to live here (the Yocto recipe roots on
     #     root1 = mtdblock8, the B slot). DTB: root0 writable (jffs2 rw), boot0 stays read-only.
-    printf "CONFIG_INITRAMFS_SOURCE=\"\"\nCONFIG_CMDLINE=\"root=/dev/mtdblock6 rootfstype=jffs2 rootwait mem=64M panic=10 mtdoops.mtddev=oops console=ttyS0,115200n8 console=tty0\"\n" > '"$WORK"'/no-initramfs.cfg
+    printf "CONFIG_INITRAMFS_SOURCE=\"%s\"\nCONFIG_INITRAMFS_COMPRESSION_NONE=y\nCONFIG_CMDLINE=\"root=/dev/mtdblock6 rootfstype=jffs2 rootwait mem=64M panic=10 mtdoops.mtddev=oops console=ttyS0,115200n8 console=tty0\"\n" '"$WORK"'/installer-initramfs.cpio.gz > '"$WORK"'/no-initramfs.cfg
     "'"$KSRC"'/scripts/kconfig/merge_config.sh" -m -O '"$KOUT"' "$CONF" '"$WORK"'/no-initramfs.cfg >/dev/null
     $MK olddefconfig
     $MK KBUILD_BUILD_VERSION=j49a-'"$REV"' zImage ti/omap/omap3-nest-j49.dtb
@@ -126,21 +104,12 @@ nix shell \
     mkimage -A arm -O linux -T kernel -C none -a 0x80008000 -e 0x80008000 \
       -n "j49-6.6-a-'"$REV"'" -d '"$WORK"'/zImage-dtb '"$OUT"'/uImage-j49-a >/dev/null
 
-    # (b) installer kernel: initramfs ON (and the installer DTB: writable root0/boot0 + staging)
-    CPP='"$CROSS"'cpp bash '"$HERE"'/make-installer-dtb.sh '"$KSRC"' '"$KOUT"' '"$WORK"'/omap3-nest-j49-installer.dtb
-    printf "CONFIG_INITRAMFS_SOURCE=\"%s\"\nCONFIG_INITRAMFS_COMPRESSION_NONE=y\n" \
-      '"$WORK"'/installer-initramfs.cpio.gz > '"$WORK"'/installer-initramfs.cfg
-    "'"$KSRC"'/scripts/kconfig/merge_config.sh" -m -O '"$KOUT"' "$CONF" '"$WORK"'/installer-initramfs.cfg >/dev/null
-    $MK olddefconfig
-    $MK KBUILD_BUILD_VERSION=j49inst-'"$REV"' zImage
-    cat '"$KOUT"'/arch/arm/boot/zImage '"$WORK"'/omap3-nest-j49-installer.dtb > '"$OUT"'/zImage-installer
-
     # (c) production kernel for the B slot (boot0 + root1): same as (a) but rooted on root1
     #     (mtdblock8), with the same DTB as (a): root0 AND root1 writable, boot0 read-only. With
     #     the unmodified production DTB root0 was read-only under this kernel, so a system on
     #     root1 could not write a new image to the other slot (found 2026-11-26,
     #     update-from-linux.md).
-    printf "CONFIG_INITRAMFS_SOURCE=\"\"\nCONFIG_CMDLINE=\"root=/dev/mtdblock8 rootfstype=jffs2 rootwait mem=64M panic=10 mtdoops.mtddev=oops console=ttyS0,115200n8 console=tty0\"\n" > '"$WORK"'/b-slot.cfg
+    printf "CONFIG_INITRAMFS_SOURCE=\"%s\"\nCONFIG_INITRAMFS_COMPRESSION_NONE=y\nCONFIG_CMDLINE=\"root=/dev/mtdblock8 rootfstype=jffs2 rootwait mem=64M panic=10 mtdoops.mtddev=oops console=ttyS0,115200n8 console=tty0\"\n" '"$WORK"'/installer-initramfs.cpio.gz > '"$WORK"'/b-slot.cfg
     "'"$KSRC"'/scripts/kconfig/merge_config.sh" -m -O '"$KOUT"' "$CONF" '"$WORK"'/b-slot.cfg >/dev/null
     $MK olddefconfig
     $MK KBUILD_BUILD_VERSION=j49b-'"$REV"' zImage ti/omap/omap3-nest-j49.dtb
@@ -149,12 +118,9 @@ nix shell \
       -n "j49-6.6-b-'"$REV"'" -d '"$WORK"'/zImage-dtb-b '"$OUT"'/uImage-j49-b >/dev/null
   '
 
-S_PROD=$(stat -c %s "$OUT/uImage-j49-a" 2>/dev/null || echo 0)
-S_INS=$(stat -c %s "$OUT/zImage-installer")
-echo "=== installer artifacts ==="
-ls -la "$OUT/uImage-j49-a" "$OUT/uImage-j49-b" "$OUT/zImage-installer"
-if [ "$S_INS" -le "$S_PROD" ]; then
-    echo "WARNING: installer kernel is not larger than the production kernel --" >&2
-    echo "         initramfs embedding may have failed" >&2
-    exit 1
-fi
+echo "=== kernels ==="
+ls -la "$OUT/uImage-j49-a" "$OUT/uImage-j49-b"
+# boot0 is read and written as a 5 MB window (nandboot and the DFU target in nest_j49.env)
+S=$(stat -c %s "$OUT/uImage-j49-a")
+[ "$S" -le $((0x500000)) ] || { echo "uImage-j49-a is larger than the 5 MB boot0 window" >&2; exit 1; }
+rm -f "$OUT/zImage-installer"

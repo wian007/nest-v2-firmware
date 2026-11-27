@@ -1,13 +1,17 @@
 /*
  * nandio: read and write the NAND partitions of the thermostat over a serial line.
  *
- * It runs in the stock 2.6.37 rescue kernel that the USB boot chain starts (see ../README.md)
- * and talks to the installer in the browser over the USB serial gadget (/dev/ttyGS0). Reading
- * and writing go through the kernel's MTD character devices, so the data has the ECC format the
- * stock boot chain reads. With it the installer can
- *   - make a full backup before anything is written,
- *   - write our U-Boot into spl0/spl1 (the first stage of the install),
- *   - put a backup back.
+ * It talks to the installer in the browser over the USB serial gadget (/dev/ttyGS0). Reading
+ * and writing go through the MTD character devices of the kernel it runs under, so the data
+ * has the ECC format of that kernel. It runs in two places:
+ *   - in the 2.6.37 rescue kernel that the USB boot chain starts (see ../README.md), whose
+ *     format is the one the stock boot chain reads: to make a full backup before anything is
+ *     written, to write our U-Boot into spl0/spl1, and to put a backup back;
+ *   - in our own kernel (6.6), whose format is the one our system reads: to write the root
+ *     file system into root0. There it is the first program the kernel in boot0 starts, at
+ *     every start: when root0 holds a system it starts that (it mounts root0 and hands over
+ *     to its /sbin/init); when it does not, it waits for the installer. So a thermostat with
+ *     an empty or damaged root0 is in installer mode by itself.
  *
  * Protocol. The host sends one command per line; nandio answers with lines, and with binary
  * frames where said. Numbers are decimal unless said otherwise. Partitions are named as in
@@ -38,16 +42,26 @@
  *   WRITE <name> <length> <mode>   mode "shift": like nandwrite, bad blocks are skipped and the
  *                                  data moves up (a new image); mode "exact": each block goes
  *                                  where it was, bad blocks are left out (a backup of this
- *                                  device). nandio answers "READY <erasesize>"; the host then
- *                                  sends one frame per erase block of the image:
+ *                                  device). nandio answers "READY <erasesize> <chunk>"; the
+ *                                  host then sends one frame per erase block of the image:
  *                                    'D' + erasesize bytes, or 'E' (leave the block erased)
+ *                                  The data of a 'D' frame goes in pieces of <chunk> bytes,
+ *                                  and nandio answers every piece with "+" before the host
+ *                                  sends the next: under our 6.6 kernel the USB serial gadget
+ *                                  stops taking data when more comes than its small input
+ *                                  buffer holds, and does not start again by itself.
  *                                  nandio answers each frame with one byte, so the host never
  *                                  runs ahead: "." done, "b" not written (mode exact, the
  *                                  block is bad). At the end "SUM <crc32 of the D data read
  *                                  back from the flash>", "OK". The host compares, leaving
  *                                  out the "b" frames.
  *   ERASE <name>                   erase the whole partition; "OK"
- *   REBOOT                         "OK", then the board restarts
+ *   REBOOT [dfu]                   "OK", then the board restarts. With "dfu" our U-Boot is
+ *                                  told to wait for the installer instead of starting what
+ *                                  is in the flash memory (a mark in RAM that survives the
+ *                                  restart; see the boot policy in uboot/files/nest_j49.env).
+ *                                  The answer is then "OK dfu", or "OK nomark" when the mark
+ *                                  could not be written.
  *   SHOW <title> <base> <span> [text]
  *                                  what the panel of the thermostat shows: a title, a line of
  *                                  text, and a ring for the progress. The next READ, WRITE or
@@ -64,6 +78,7 @@
  */
 #define _GNU_SOURCE /* pread, pwrite */
 #include <errno.h>
+#include <stdarg.h>
 #include <fcntl.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -72,6 +87,12 @@
 #include <unistd.h>
 #include <sys/ioctl.h>
 #include <sys/mount.h>
+#ifndef MNT_DETACH                 /* the C library of the rescue kernel's toolchain is old */
+#define MNT_DETACH 2
+#endif
+#ifndef MS_MOVE
+#define MS_MOVE 8192
+#endif
 #include <sys/reboot.h>
 #include <sys/klog.h>
 #include <sys/wait.h>
@@ -80,6 +101,7 @@
 #include <sys/types.h>
 
 #define MAXPART 24
+#define CHUNK 2048                 /* a piece of block data from the host; see WRITE */
 #define MAXERASE (256 * 1024)
 
 /* from <mtd/mtd-abi.h>; spelled out so the tool builds without kernel headers */
@@ -175,6 +197,21 @@ static void draw(int pct)
     text_mid(cy + 36, show_text, 2, C_DIM);
     show_pct = pct;
 }
+/* One line of small text low on the screen, without drawing the rest again: what nandio is
+ * doing, for somebody who looks at the panel when the line to the PC says nothing. It also
+ * goes to the kernel log. */
+static void status(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void status(const char *fmt, ...)
+{
+    char text[40]; va_list ap; int x, y, k;
+    va_start(ap, fmt); vsnprintf(text, sizeof text, fmt, ap); va_end(ap);
+    if (fake) return;
+    k = open("/dev/kmsg", O_WRONLY);
+    if (k >= 0) { char l[64]; int n = snprintf(l, sizeof l, "nandio: %s\n", text); if (write(k, l, n) < 0) { /* no kernel log */ } close(k); }
+    if (!fb) return;
+    for (y = fb_h / 2 + 62; y < fb_h / 2 + 62 + 9; y++) for (x = fb_w / 2 - 110; x < fb_w / 2 + 110; x++) px(x, y, C_BG);
+    text_mid(fb_h / 2 + 63, text, 1, C_DIM);
+}
 /* Progress inside the command that runs now: done of total. Redraws when the number changes. */
 static void progress(unsigned long done, unsigned long total)
 {
@@ -210,7 +247,6 @@ static int put(const void *buf, size_t n)
     return 0;
 }
 static void say(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
-#include <stdarg.h>
 static void say(const char *fmt, ...)
 {
     char line[256]; va_list ap; int n;
@@ -252,7 +288,7 @@ static int get_line(char *line, size_t max, int wait_ms)
             if (select(in_fd + 1, &set, NULL, NULL, &tv) <= 0) return 0;
         }
         r = read(in_fd, &c, 1);
-        if (r == 0) return -1;
+        if (r == 0) { errno = 0; return -1; }
         if (r < 0) { if (errno == EINTR || errno == EAGAIN) continue; return -1; }
         if (c == '\r') continue;
         if (c == '\n') { if (n == 0) continue; line[n] = 0; return 1; }
@@ -411,15 +447,27 @@ static void cmd_write(const char *name, unsigned long length, const char *mode)
     if (length == 0 || length % p->erasesize || length > p->size) { say("ERR length must be whole erase blocks and fit"); return; }
     fd = open(p->dev, O_RDWR);
     if (fd < 0) { say("ERR open %s: %s", p->name, strerror(errno)); return; }
-    say("READY %lu", p->erasesize);
+    say("READY %lu %d", p->erasesize, CHUNK);
     note(name);
     /* From here every frame of the image is taken, also after an error: the host must not be
      * left writing into a line nobody reads. */
     for (done = 0; done < length; done += p->erasesize) {
         char kind, ans = '.';
+        unsigned long nblk = done / p->erasesize + 1, total = length / p->erasesize;
+        /* the first blocks say on the panel where they are: when a write stands still, that
+         * shows in which part */
+        if (nblk <= 3) status("%s %lu/%lu RECEIVE", p->name, nblk, total);
         if (get(&kind, 1)) { close(fd); return; }
-        if (kind == 'D') { if (get(block, p->erasesize)) { close(fd); return; } }
+        if (kind == 'D') {
+            unsigned long at;
+            for (at = 0; at < p->erasesize; at += CHUNK) {
+                unsigned long n = p->erasesize - at < CHUNK ? p->erasesize - at : CHUNK;
+                if (get(block + at, n)) { close(fd); return; }
+                put("+", 1);
+            }
+        }
         else if (kind != 'E') { if (!err) err = "bad frame"; kind = 'E'; }
+        if (nblk <= 3) status("%s %lu/%lu WRITE", p->name, nblk, total);
         if (!err) {
             if (shift) {
                 while (off < p->size && is_bad(fd, off)) off += p->erasesize;
@@ -444,6 +492,7 @@ static void cmd_write(const char *name, unsigned long length, const char *mode)
             if (shift) off += p->erasesize;
         }
         put(&ans, 1);
+        if (nblk <= 3 || nblk % 8 == 0) status("%s %lu/%lu", p->name, nblk, total);
         progress(done + p->erasesize, length);
     }
     /* shift: what is left of the partition must not keep an old image */
@@ -457,14 +506,34 @@ static void cmd_write(const char *name, unsigned long length, const char *mode)
 }
 
 static struct termios cooked;
+/* Restart the board, and make sure of it. Which way works depends on the kernel:
+ *  - the 2.6.37 rescue kernel restarts with reboot();
+ *  - under our 6.6 kernel reboot() leaves the board dead until the ring is held, and the
+ *    watchdog is the clean way (it is what the installer always used).
+ * After the way that fits, the others are tried too: the watchdog left to run out, and the
+ * software reset bits of the OMAP3 reset controller. */
+#include <sys/utsname.h>
 static void restart(void)
 {
+    struct utsname u; int fd, old = 0;
+    if (!uname(&u) && !strncmp(u.release, "2.6.", 4)) old = 1;
     sync(); sleep(1);
-    reboot(RB_AUTOBOOT);
+    note("restart");
+    if (old) { reboot(RB_AUTOBOOT); sleep(3); }
+    fd = open("/dev/watchdog", O_WRONLY);
+    if (fd >= 0) { int t = 2; ioctl(fd, _IOWR('W', 6, int), &t); /* WDIOC_SETTIMEOUT; never fed */ sleep(8); }
+    fd = open("/dev/mem", O_RDWR | O_SYNC);
+    if (fd >= 0) {
+        /* PRM_RSTCTRL at 0x48307250: bit 1 = global software reset, bit 2 = reset with DPLL3 */
+        volatile unsigned int *prm = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x48307000);
+        if (prm != MAP_FAILED) { prm[0x250 / 4] |= 2; sleep(2); prm[0x250 / 4] |= 4; sleep(2); }
+        close(fd);
+    }
+    if (!old) reboot(RB_AUTOBOOT);
     for (;;) sleep(60);
 }
 /* As init: what a system normally sets up before a program runs. */
-static void init_system(void)
+static void init_system_early(void)
 {
     mkdir("/proc", 0555); mkdir("/sys", 0555); mkdir("/dev", 0755); mkdir("/tmp", 01777);
     mount("proc", "/proc", "proc", 0, NULL);
@@ -472,8 +541,81 @@ static void init_system(void)
     /* device nodes from the kernel, with the numbers it really uses; the nodes that are in
      * the initramfs stay when this fails */
     mount("devtmpfs", "/dev", "devtmpfs", 0, NULL);
+}
+static void init_system(void)
+{
+    int fd;
+    /* in case boot_system() took them away on its way out */
+    mount("proc", "/proc", "proc", 0, NULL);
+    mount("sysfs", "/sys", "sysfs", 0, NULL);
+    /* under our kernel the text console would paint over our screen: take it off the panel */
+    fd = open("/sys/class/vtconsole/vtcon1/bind", O_WRONLY);
+    if (fd >= 0) { if (write(fd, "0", 1) < 0) { /* no text console there */ } close(fd); }
     /* the kernel's console is this same serial line: its messages must not get into the data */
     klogctl(6, NULL, 0);
+}
+/* Under our own kernel, as init: start the system in root0 when there is one. Returns only
+ * when there is none (or it cannot be started): the caller then serves the installer.
+ * "A system" = root0 mounts as jffs2 and has an init program. */
+static void boot_system(void)
+{
+    static const char *const inits[] = { "/sbin/init", "/lib/systemd/systemd", "/usr/lib/systemd/systemd", NULL };
+    char dev[32] = ""; struct utsname u; int i, tries;
+    if (uname(&u) || !strncmp(u.release, "2.6.", 4)) return;      /* the rescue kernel: never */
+    if (getenv("NANDIO_INSTALL")) return;                          /* asked for on the kernel command line */
+    /* which partition: the last root=/dev/mtdblockN of the kernel command line (the kernel for
+     * the second slot names root1 there), else the one called root0 */
+    {
+        char cmd[1024]; FILE *f = fopen("/proc/cmdline", "r"); size_t n; char *p, *last = NULL;
+        if (f) {
+            n = fread(cmd, 1, sizeof cmd - 1, f); cmd[n] = 0; fclose(f);
+            for (p = cmd; (p = strstr(p, "root=/dev/mtdblock")); p += 5) last = p + 5;
+            if (last) sscanf(last, "%31[^ \n]", dev);
+        }
+    }
+    if (!dev[0]) {
+        if (load_parts()) return;
+        for (i = 0; i < nparts; i++)
+            if (!strcmp(parts[i].name, "root0")) snprintf(dev, sizeof dev, "/dev/mtdblock%s", parts[i].dev + strlen("/dev/mtd"));
+    }
+    if (!dev[0]) return;
+    mkdir("/newroot", 0755);
+    /* the block device shows up a moment after the kernel has scanned the flash memory */
+    for (tries = 0; tries < 50 && access(dev, F_OK); tries++) usleep(100000);
+    /* Look before mounting: an empty partition is not mounted at all. Mounted read-write on
+     * empty flash, jffs2 starts to write by itself; on this board that code has crashed in the
+     * kernel before, and the flash memory then stays locked: the installer's first write
+     * never came back (27 November 2026). So: no jffs2 start mark, no mount. */
+    {
+        char chr[32]; unsigned char head[2] = { 0xff, 0xff }; unsigned long off, erase = 0x20000, size = 0; int fd, found = 0;
+        snprintf(chr, sizeof chr, "/dev/mtd%s", dev + strlen("/dev/mtdblock"));
+        if (!load_parts()) for (i = 0; i < nparts; i++) if (!strcmp(parts[i].dev, chr)) { erase = parts[i].erasesize; size = parts[i].size; }
+        fd = open(chr, O_RDONLY);
+        if (fd < 0) return;
+        /* the mark (0x1985, either byte order) at the start of one of the first good blocks */
+        for (off = 0; off < size && off < 8 * erase && !found; off += erase) {
+            long long o = (long long)off;
+            if (ioctl(fd, MEMGETBADBLOCK, &o) > 0) continue;
+            if (pread(fd, head, 2, (off_t)off) == 2 && ((head[0] == 0x85 && head[1] == 0x19) || (head[0] == 0x19 && head[1] == 0x85))) found = 1;
+        }
+        close(fd);
+        if (!found) return;
+    }
+    /* read-only, as the kernel itself mounts a root file system; the system remounts it */
+    if (mount(dev, "/newroot", "jffs2", MS_RDONLY, NULL)) return;
+    for (i = 0; inits[i]; i++) {
+        char path[80]; snprintf(path, sizeof path, "/newroot%s", inits[i]);
+        if (!access(path, X_OK)) break;
+    }
+    if (!inits[i]) { umount("/newroot"); return; }                  /* empty flash mounts too: no system in it */
+    /* hand over: the new root becomes "/", ours is left behind (it is a few files in RAM) */
+    umount2("/proc", MNT_DETACH); umount2("/sys", MNT_DETACH);
+    mount("/dev", "/newroot/dev", NULL, MS_MOVE, NULL);
+    if (chdir("/newroot") || mount(".", "/", NULL, MS_MOVE, NULL) || chroot(".") || chdir("/")) return;
+    { int fd = open("/dev/console", O_RDWR); if (fd >= 0) { dup2(fd, 0); dup2(fd, 1); dup2(fd, 2); if (fd > 2) close(fd); } }
+    execl(inits[i], inits[i], (char *)NULL);
+    /* not reached when it worked; when it did not, there is nothing sane to fall back to */
+    for (;;) sleep(60);
 }
 int main(int argc, char **argv)
 {
@@ -482,7 +624,11 @@ int main(int argc, char **argv)
     int started = 0, is_init = getpid() == 1;
     fake = getenv("NANDIO_FAKE");
     crc_init();
-    if (is_init && !fake) init_system();
+    if (is_init && !fake) {
+        init_system_early();
+        boot_system();              /* comes back only when there is no system to start */
+        init_system();
+    }
     if (!fake) {
         struct termios t;
         /* "-": the line we were started on, else a device to open. As init: keep trying,
@@ -493,38 +639,55 @@ int main(int argc, char **argv)
         tcgetattr(fd, &cooked);
         /* raw: the line carries binary data in both directions */
         if (!tcgetattr(fd, &t)) { cfmakeraw(&t); t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0; tcsetattr(fd, TCSANOW, &t); }
-        in_fd = fd; out_fd = fd ? fd : 1;
+        /* A line we opened ourselves is read and written through the same descriptor. Only
+         * with "-" (fd 0) is the output descriptor 1. This used to be decided by "fd is 0":
+         * as init under our kernel nothing is open yet, the line itself becomes descriptor 0,
+         * and everything nandio said went to a descriptor that did not exist. (Found on the
+         * device, 27 November 2026: the screen said CONNECTED, the PC received nothing.) */
+        in_fd = fd; out_fd = strcmp(tty, "-") ? fd : 1;
     }
     /* nandio starts early in the boot of the rescue system: /proc is not mounted yet then
      * (seen on the device: "no partition table"). Mounting it twice does no harm. */
     if (!fake && !is_init) { mkdir("/proc", 0555); mount("proc", "/proc", "proc", 0, NULL); }
     fb_open();
     draw(0);
+    status("LINE OPEN");
     while (load_parts()) {
         say("ERR no partition table: %s", strerror(errno));
+        status("NO PARTITION TABLE");
         if (!is_init) return 1;
         sleep(2);
     }
-    note("ready: waiting for the installer on USB");
+    status("%d PARTITIONS", nparts);
+    {
+    unsigned long banners = 0, gone = 0;
     for (;;) {
         char cmd[16], a[64], c[16]; unsigned long n = 0; int k;
         int r = get_line(line, sizeof line, started ? 0 : 1000);
         if (r < 0) {
-            /* The line is gone: the cable was pulled or the PC reset the port. As init, open
-             * it again and start over (seen on the device: after a reconnect nandio was deaf). */
+            /* Nothing can be read: the cable is out, the PC has not opened the port yet, or it
+             * reset the port. That is not an end: wait, open the line again, go on. (Seen on
+             * the device: after a reconnect nandio was deaf; and under our kernel it said
+             * nothing at all, which is why the screen now says what it is doing.) */
+            int e = errno;
             if (!is_init) return 0;
+            gone++;
+            status("NO LINE %lu E%d", gone, e);
+            sleep(1);
             if (strcmp(tty, "-")) {
-                struct termios t; int fd;
-                close(in_fd);
-                do { sleep(1); fd = open(tty, O_RDWR | O_NOCTTY); } while (fd < 0);
-                if (!tcgetattr(fd, &t)) { cooked = t; cfmakeraw(&t); t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0; tcsetattr(fd, TCSANOW, &t); }
-                in_fd = out_fd = fd;
-            } else sleep(1);
+                struct termios t; int fd = open(tty, O_RDWR | O_NOCTTY);
+                if (fd >= 0) {
+                    close(in_fd);
+                    if (!tcgetattr(fd, &t)) { cooked = t; cfmakeraw(&t); t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0; tcsetattr(fd, TCSANOW, &t); }
+                    in_fd = out_fd = fd;
+                }
+            }
             started = 0;
-            strcpy(show_title, "WAITING"); show_text[0] = 0; show_pct = -1; draw(0);
+            say("J49NANDIO 1");
             continue;
         }
-        if (r == 0) { say("J49NANDIO 1"); continue; }
+        if (r == 0) { say("J49NANDIO 1"); if (++banners % 5 == 1) status("WAITING %lu", banners); continue; }
+        if (!started) status("CONNECTED");
         started = 1;
         cmd[0] = a[0] = c[0] = 0;
         k = sscanf(line, "%15s %63s %lu %15s", cmd, a, &n, c);
@@ -550,6 +713,17 @@ int main(int argc, char **argv)
         else if (!strcmp(cmd, "ERASE") && k >= 2) cmd_erase(a);
         else if (!strcmp(cmd, "WRITE") && k == 4) cmd_write(a, n, c);
         else if (!strcmp(cmd, "REBOOT")) {
+            int marked = 0;
+            if (k >= 2 && !strcmp(a, "dfu") && !fake) {
+                /* 0xdf00df00 at 0x83e00000: "stay in the DFU window", read once by our U-Boot */
+                int fd = open("/dev/mem", O_RDWR | O_SYNC);
+                if (fd >= 0) {
+                    volatile unsigned int *m = mmap(NULL, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x83e00000);
+                    if (m != MAP_FAILED) { m[0] = 0xdf00df00u; marked = m[0] == 0xdf00df00u; munmap((void *)m, 4096); }
+                    close(fd);
+                }
+                say(marked ? "OK dfu" : "OK nomark");
+            } else
             say("OK");
             note("restart");
             if (fake) return 0;
@@ -569,5 +743,6 @@ int main(int argc, char **argv)
             { struct termios t = cooked; cfmakeraw(&t); t.c_cc[VMIN] = 1; t.c_cc[VTIME] = 0; tcsetattr(in_fd, TCSANOW, &t); }
             started = 0;
         } else say("ERR unknown command");
+    }
     }
 }

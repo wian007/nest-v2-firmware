@@ -13,7 +13,7 @@
 #   x-load.bin, u-boot.bin      tools/dfu-install/nest-dfu/        (see its README)
 #   nest-service-uImage         tools/dfu-install/payload/         (installer/build-service-kernel.sh)
 #   u-boot-nest-j49.uimg        tools/dfu-install/uboot/out/       (uboot/build.sh)
-#   zImage-installer, uImage-j49-a   tools/dfu-install/installer/out/   (installer/build.sh)
+#   uImage-j49-a                tools/dfu-install/installer/out/   (installer/build.sh)
 #   the root file system        J49_ROOTFS=<file .jffs2>, or the newest in build/tmp/deploy
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
@@ -31,7 +31,7 @@ if [ "${2:-}" = "--images" ]; then
         echo "{"
         sep=""
         for pair in "xload:$D/nest-dfu/x-load.bin" "ubootram:$D/nest-dfu/u-boot.bin" "service:$D/payload/nest-service-uImage" \
-                    "uboot:$D/uboot/out/u-boot-nest-j49.uimg" "installer:$D/installer/out/zImage-installer" \
+                    "uboot:$D/uboot/out/u-boot-nest-j49.uimg" \
                     "kernel:$D/installer/out/uImage-j49-a" "rootfs:$ROOTFS"; do
             role="${pair%%:*}"; src="${pair#*:}"
             case "$SKIP" in *" $role "*) echo "left out: $role" >&2; continue;; esac
