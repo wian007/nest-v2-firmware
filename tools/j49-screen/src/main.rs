@@ -1225,7 +1225,8 @@ const P_CONFIRM: usize = 5;
 const P_SPLASH: usize = 6;
 const SPLASH_MS: u64 = 2500;
 
-/// What the dial shows, gathered in one place. J49_DEMO=1 gives sample values (screenshots on a PC).
+/// What the dial shows, gathered in one place. J49_DEMO=1 gives sample values (screenshots on a
+/// PC); J49_DEMO=live gives a simulated room that follows the ring (the desktop emulator).
 struct View {
     room: Option<(f32, f32)>,
     heat_mode: bool,
@@ -1240,7 +1241,15 @@ struct View {
     next: Option<(u64, u64)>, // hhmm, tenths
 }
 fn view() -> View {
-    if std::env::var("J49_DEMO").is_ok() {
+    let demo = std::env::var("J49_DEMO").ok();
+    if demo.as_deref() == Some("live") {
+        // for the desktop emulator: a room of 19.4 degrees and a heating that follows the target
+        let (heat_mode, away) = (HEAT_MODE.load(Ordering::Relaxed), AWAY.load(Ordering::Relaxed));
+        let (setpoint, away_temp) = (SETPOINT_X10.load(Ordering::Relaxed) as f32 / 10.0, AWAY_X10.load(Ordering::Relaxed) as f32 / 10.0);
+        let demand = heat_mode && (if away { away_temp } else { setpoint }) > 19.4;
+        return View { room: Some((19.4, 44.0)), heat_mode, away, setpoint, away_temp, demand, relay: demand, wait: 0, frost: false, backplate: true, next: None };
+    }
+    if demo.is_some() {
         return View {
             room: Some((19.4, 44.0)),
             heat_mode: true,
@@ -1811,12 +1820,20 @@ fn turn(page: &AtomicUsize, step: i32) {
         _ => {}
     }
 }
+/// Where the ring's input devices are. J49_INPUT=<dir> names a directory with `event0` (the
+/// click) and `event1` (the rotation) instead: the desktop emulator writes events there.
+fn input_dev(n: u32) -> String {
+    match std::env::var("J49_INPUT") {
+        Ok(dir) => format!("{dir}/event{n}"),
+        Err(_) => format!("/dev/input/event{n}"),
+    }
+}
 fn spawn_input(page: Arc<AtomicUsize>, activity: Arc<AtomicU64>) {
     // the ring's click: EV_KEY KEY_POWER on event0
     {
         let (page, activity) = (page.clone(), activity.clone());
         std::thread::spawn(move || {
-            if let Ok(mut f) = File::open("/dev/input/event0") {
+            if let Ok(mut f) = File::open(input_dev(0)) {
                 let mut b = [0u8; 16];
                 while f.read_exact(&mut b).is_ok() {
                     let typ = u16::from_le_bytes([b[8], b[9]]);
@@ -1836,7 +1853,7 @@ fn spawn_input(page: Arc<AtomicUsize>, activity: Arc<AtomicU64>) {
     }
     // the ring's rotation: EV_REL counts on event1 (or event3 on other kernels)
     std::thread::spawn(move || {
-        for dev in ["/dev/input/event1", "/dev/input/event3"] {
+        for dev in [input_dev(1), input_dev(3)] {
             if let Ok(mut f) = File::open(dev) {
                 let mut b = [0u8; 16];
                 let (mut acc, mut last_dir, mut dead) = (0i32, 0i32, 0i32);
