@@ -2,7 +2,7 @@ SUMMARY = "MQTT bridge for the J49 thermostat with Home Assistant discovery"
 DESCRIPTION = "Publishes the thermostat state (files of bpd and /var/lib/j49) to an MQTT \
 broker and applies commands from it; announces itself to Home Assistant. No crate \
 dependencies. Source lives in tools/j49-mqtt in this repository; see docs/thermostat.md."
-HOMEPAGE = "https://github.com/wian007/nest-yocto"
+HOMEPAGE = "https://github.com/wian007/nest-v2-firmware"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 

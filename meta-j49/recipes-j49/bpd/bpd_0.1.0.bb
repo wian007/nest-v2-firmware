@@ -3,7 +3,7 @@ DESCRIPTION = "Feeds the backplate STM32's head-unit watchdog with the type-0xa1
 'quiet message' frame on UART3 (/dev/ttyS2); without it the backplate cold-resets \
 the head unit ~29 min after boot. Also a sniffer/sender for the backplate protocol. \
 Source lives in tools/bpd in this repository."
-HOMEPAGE = "https://github.com/wian007/nest-yocto"
+HOMEPAGE = "https://github.com/wian007/nest-v2-firmware"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 

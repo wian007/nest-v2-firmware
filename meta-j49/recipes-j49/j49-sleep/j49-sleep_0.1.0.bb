@@ -2,7 +2,7 @@ SUMMARY = "Sleep manager for the J49 head unit"
 DESCRIPTION = "Suspends the head unit when the panel is off, the heating is idle and nobody \
 uses SSH or the web page: backplate quiet mode through bpd, wake-on-WLAN patterns, suspend. \
 Off by default. No crate dependencies. Source: tools/j49-sleep; see docs/sleep-j49.md."
-HOMEPAGE = "https://github.com/wian007/nest-yocto"
+HOMEPAGE = "https://github.com/wian007/nest-v2-firmware"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 

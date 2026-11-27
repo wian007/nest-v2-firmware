@@ -3,7 +3,7 @@ DESCRIPTION = "Draws the thermostat on the 320x320 panel (/dev/fb0): a dial with
 temperature, the room temperature and what the heating does; a menu for mode, schedule, away, \
 status and settings; the login question of the web page; the installer's progress. \
 Source lives in tools/j49-screen in this repository."
-HOMEPAGE = "https://github.com/wian007/nest-yocto"
+HOMEPAGE = "https://github.com/wian007/nest-v2-firmware"
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://${COMMON_LICENSE_DIR}/MIT;md5=0835ade698e0bcf8506ecda2f7b4f302"
 
