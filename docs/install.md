@@ -5,11 +5,12 @@ back. Read the [disclaimer](../DISCLAIMER.md) first: this replaces the firmware 
 switches real heating.
 
 **Status of this guide (27 November 2026).** The steps of the install are the ones we did by
-hand with command-line tools, several times, on one thermostat. The installer page that does
-them from the browser is new: its protocol code is tested against simulated devices and against
-the real service program with simulated flash memory, but **not yet on a thermostat**. The
-restore of a full backup after a full install is not tested on a thermostat either. Until this
-paragraph says otherwise, expect to need the command-line route in
+hand with command-line tools, several times, on one thermostat. The installer page was tried on
+that thermostat up to and including a full backup: the loaders, the service kernel with our own
+screen, the check that it is a 2nd generation thermostat, and a backup of the whole flash
+memory that checks out (256 MB in about 9 minutes). **Not yet done from the page on a device:**
+writing the boot loader, installing the system, and putting a backup back. Until this paragraph
+says otherwise, expect to need the command-line route in
 [tools/dfu-install/README.md](../tools/dfu-install/README.md) when something does not work.
 
 ## What you need
@@ -101,6 +102,11 @@ thermostat it was made on.
 
 ## The files
 
+The installer page on <https://wian007.github.io/nest-v2-firmware/> loads the image files by
+itself. The same files, with checksums and a notice of makers, licences and sources, are a
+[release](https://github.com/wian007/nest-v2-firmware/releases) of the project. To build them
+yourself:
+
 | File | What | From |
 |---|---|---|
 | `x-load.bin`, `u-boot.bin` | The loaders of the USB boot chain | [tools/dfu-install/nest-dfu](../tools/dfu-install/nest-dfu/README.md) |
@@ -117,6 +123,8 @@ thermostat it was made on.
   It reads and writes through the MTD driver of the stock kernel, so what it writes has the
   ECC format the stock boot chain reads. `nandio/test.py` tests it on a PC.
 - `tools/web-installer/js/service.js`: the browser side, and the format of the backup file.
+  `tools/dfu-install/nandio/j49backup.py` checks a backup file on a PC and converts it to and
+  from plain images; `probe.py` talks to the service without the browser.
 - `tools/web-installer/js/dfu.js`: USB DFU 1.1 download to our U-Boot.
 - `node tools/web-installer/test/run.mjs tools/dfu-install/nandio/nandio-host` runs the
   browser code against a simulated ROM, a simulated DFU device and the real `nandio`.

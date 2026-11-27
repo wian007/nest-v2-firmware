@@ -86,6 +86,8 @@
 struct erase_info_user { unsigned int start, length; };
 #define MEMERASE       _IOW('M', 2, struct erase_info_user)
 #define MEMGETBADBLOCK _IOW('M', 11, long long)
+struct mtd_ecc_stats { unsigned int corrected, failed, badblocks, bbtblocks; };
+#define ECCGETSTATS    _IOR('M', 18, struct mtd_ecc_stats)
 
 struct part { char name[32]; char dev[48]; unsigned long size, erasesize; };
 static struct part parts[MAXPART];
@@ -314,10 +316,15 @@ static int all_ff(const unsigned char *b, unsigned long n)
     while (n--) if (*b++ != 0xff) return 0;
     return 1;
 }
-/* Read one erase block; 0 ok, 1 read with an error (the bytes are what the kernel gave). */
+/* Read one erase block; 0 ok, 1 read with an error (the bytes are what the kernel gave).
+ * The kernel hands the data over also when the error correction failed, without an error from
+ * read(): only its counter of failed corrections tells. (Seen on the device: partitions in
+ * another ECC format read "without errors" before this was counted.) */
 static int read_block(int fd, struct part *p, unsigned long off, unsigned char *buf)
 {
     unsigned long got = 0; int bad = 0;
+    struct mtd_ecc_stats before, after;
+    int stats = !fake && !ioctl(fd, ECCGETSTATS, &before);
     memset(buf, 0xff, p->erasesize);
     while (got < p->erasesize) {
         ssize_t r = pread(fd, buf + got, p->erasesize - got, (off_t)(off + got));
@@ -327,6 +334,7 @@ static int read_block(int fd, struct part *p, unsigned long off, unsigned char *
         bad = 1;
         got += 2048;
     }
+    if (stats && !ioctl(fd, ECCGETSTATS, &after) && after.failed != before.failed) bad = 1;
     return bad;
 }
 
