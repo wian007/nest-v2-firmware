@@ -206,6 +206,38 @@ export class Service {
     return this.writeFrames(name, frames, "shift", progress);
   }
   /** Erase a whole partition. */
+  /** Whose data is in a partition: {data, failed} over its first blocks. Blocks the other
+   *  kernel wrote do not read (another error correction layout). */
+  async check(name) {
+    await this.send("CHECK " + name);
+    const a = (await this.answer()).split(" ");
+    if (a[0] !== "OK") throw new Error("unexpected answer: " + a.join(" "));
+    return { data: +a[1], failed: +a[2] };
+  }
+  /** A small file out of the file system in a partition, or null when it is not there. */
+  async getFile(part, path) {
+    await this.send("GET " + part + " " + path);
+    let head;
+    try { head = await this.answer(); } catch (e) { return null; }
+    if (!head.startsWith("DATA ")) throw new Error("unexpected answer: " + head);
+    const data = await this.r.bytes(+head.split(" ")[1]);
+    if ((await this.answer()) !== "SUM " + hex8(crc32(data))) throw new Error(path + ": checksum differs");
+    if ((await this.answer()) !== "OK") throw new Error("no OK after " + path);
+    return data.slice();
+  }
+  /** Write a small file into the file system in a partition. */
+  async putFile(part, path, data) {
+    await this.send("PUT " + part + " " + path + " " + data.length);
+    const ready = await this.answer();
+    if (!ready.startsWith("READY")) throw new Error("unexpected answer: " + ready);
+    const chunk = +ready.split(" ")[1] || 2048;
+    for (let at = 0; at < data.length; at += chunk) {
+      await this.write(data.subarray(at, Math.min(at + chunk, data.length)));
+      if ((await this.r.byte()) !== 43) throw new Error("unexpected answer while sending " + path);
+    }
+    if ((await this.answer()) !== "SUM " + hex8(crc32(data))) throw new Error(path + ": what was read back differs from what was sent");
+    if ((await this.answer()) !== "OK") throw new Error("no OK after " + path);
+  }
   async erase(name) {
     await this.send("ERASE " + name);
     if ((await this.answer()) !== "OK") throw new Error("no OK after erasing " + name);

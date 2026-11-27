@@ -305,8 +305,9 @@ The hotspot has no password. What protects the thermostat is the login of the we
 somebody must confirm on the device. Everything else that listens on the thermostat (SSH) is
 reachable from the hotspot as it is from the home network.
 
-Not yet tried on a device (27 November 2026): the policy and the commands were tested against
-a stand-in for `wpa_supplicant` on a PC.
+Seen on a device on 27 November 2026: the hotspot after a fresh install. The other rows of the
+table (five minutes without a network, the ten-minute retry, the menu row) have unit tests and
+ran against a stand-in for `wpa_supplicant` on a PC.
 
 ## Web page (j49-web)
 

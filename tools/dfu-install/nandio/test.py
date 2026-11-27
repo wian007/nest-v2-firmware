@@ -100,6 +100,18 @@ with tempfile.TemporaryDirectory() as d:
     assert got[:ERASE] == back[0] and got[ERASE:ERASE + 8] == b"BADBLOCK" and got[2 * ERASE:] == b"\xff" * ERASE
 
     # refusals
+    # a small file into a file system and out again; the directories are made
+    nvs = rnd(912)
+    cmd(p, "PUT system-config a/b/wl.bin %d" % len(nvs)); r = line(p); assert r.startswith("READY"), r
+    ch = int(r.split()[1])
+    for at in range(0, len(nvs), ch):
+        p.stdin.write(nvs[at:at + ch]); p.stdin.flush(); assert p.stdout.read(1) == b"+"
+    assert line(p) == "SUM %08x" % (zlib.crc32(nvs) & 0xffffffff) and line(p) == "OK"
+    cmd(p, "GET system-config a/b/wl.bin"); r = line(p); assert r == "DATA 912", r
+    assert p.stdout.read(912) == nvs and line(p).startswith("SUM") and line(p) == "OK"
+    cmd(p, "CHECK spl0"); r = line(p); assert r.startswith("OK ") and r.split()[2] == "0", r
+    for bad in ["GET system-config nope", "GET system-config ../mtd", "GET nope x", "PUT system-config x 0", "GET system-config"]:
+        cmd(p, bad); r = line(p); assert r.startswith("ERR"), (bad, r)
     for bad in ["WRITE spl0 100 shift", "WRITE nope %d shift" % ERASE, "WRITE spl0 %d sideways" % ERASE, "WRITE spl0 %d shift" % (5 * ERASE), "READ nope", "FLY"]:
         cmd(p, bad); assert line(p).startswith("ERR"), bad
     cmd(p, "ERASE spl0"); assert line(p) == "OK"

@@ -253,6 +253,8 @@ async function runBackup() {
 }
 
 // ---------- step 5: the boot loader ----------
+const NVS_STOCK = "wl12xx-nvs.bin";
+const NVS_J49 = "j49-persist/override/lib/firmware/ti-connectivity/wl127x-nvs.bin";
 async function runUboot() {
   for (const name of ["spl0", "spl1"]) {
     state("uboot", T("uboot.writing", { name }));
@@ -267,6 +269,28 @@ async function runUboot() {
   await service.show(T("panel.bootloader"), 0, 100, "root0");
   await service.erase("root0");
   log("root0 erased");
+  // Our kernel cannot read what the stock firmware wrote (another error correction layout),
+  // and the reverse. Two things follow, and both must happen now, under the stock kernel:
+  // - the calibration of the WiFi chip (with its MAC address) is fetched from the stock
+  //   partition system-config; step 7 gives it to the new system. It is kept in this browser
+  //   until then, for the case that the page is loaded again in between.
+  // - the partition scratch, which the new system uses for what must survive a reinstall, is
+  //   erased when stock data is in it. When the stock kernel cannot read it, it holds the data
+  //   of an earlier J49 install (WiFi network, keys): that stays.
+  if (service.parts.find(p => p.name === "system-config")) {
+    const nvs = await service.getFile("system-config", NVS_STOCK);
+    if (nvs && nvs.length === 912) { store.set("j49.nvs", btoa(String.fromCharCode(...nvs))); log("WiFi calibration of this thermostat fetched (" + nvs.length + " bytes)"); }
+    else log("no WiFi calibration found in system-config: the thermostat will have a random WiFi address");
+  }
+  if (service.parts.find(p => p.name === "scratch")) {
+    const c = await service.check("scratch");
+    if (c.failed === 0) {
+      state("uboot", T("uboot.writing", { name: "scratch" }));
+      await service.show(T("panel.bootloader"), 0, 100, "scratch");
+      await service.erase("scratch");
+      log("scratch erased (it held stock data, which the new kernel cannot read)");
+    } else log("scratch holds data of an earlier J49 install: kept");
+  }
   await service.show("DONE", 100, 0, T("panel.bootloader"));
   // Our U-Boot starts the kernel in the flash memory when it can, and waits for a new kernel
   // only when told to: the service leaves a mark in RAM for it.
@@ -317,6 +341,12 @@ async function runSys() {
   await svc.show(T("panel.system"), 0, 100, "root0");
   const r = await svc.writeImage("root0", files.rootfs.data, (d, t) => bar("sys", d, t));
   log("root0 written and read back" + (r.skipped ? " (" + r.skipped + " bad blocks left out)" : ""));
+  // the WiFi calibration fetched in step 5, to where the new system looks for it
+  const nvs = store.get("j49.nvs");
+  if (nvs && svc.parts.find(p => p.name === "scratch")) {
+    await svc.putFile("scratch", NVS_J49, Uint8Array.from(atob(nvs), c => c.charCodeAt(0)));
+    log("WiFi calibration stored for the new system");
+  }
   await svc.show("DONE", 100, 0, T("panel.system"));
   await svc.reboot();
   await closePort();

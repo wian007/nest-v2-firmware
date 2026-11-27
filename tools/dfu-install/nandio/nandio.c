@@ -56,6 +56,19 @@
  *                                  back from the flash>", "OK". The host compares, leaving
  *                                  out the "b" frames.
  *   ERASE <name>                   erase the whole partition; "OK"
+ *   CHECK <name>                   read the partition until a block does not read:
+ *                                  "OK <blocks with data> <not readable: 0 or 1>".
+ *                                  Blocks written by the other kernel are not readable (another
+ *                                  error correction layout): this tells whose data is in it.
+ *   GET <name> <path>              a small file out of the jffs2 file system in that partition:
+ *                                  "DATA <length>", the bytes, "SUM <crc32 hex>", "OK". Only the
+ *                                  kernel that wrote a partition reads it without errors, so the
+ *                                  installer fetches what must be kept (the WiFi calibration)
+ *                                  while the stock kernel still runs.
+ *   PUT <name> <path> <length>     write a small file into the jffs2 file system in that
+ *                                  partition (an erased partition is an empty file system);
+ *                                  "READY <chunk>", then the bytes in pieces of <chunk>, each
+ *                                  answered with "+"; "SUM <crc32 hex>", "OK".
  *   REBOOT [dfu]                   "OK", then the board restarts. With "dfu" our U-Boot is
  *                                  told to wait for the installer instead of starting what
  *                                  is in the flash memory (a mark in RAM that survives the
@@ -435,6 +448,98 @@ static void cmd_erase(const char *name)
     close(fd);
     if (failed) say("ERR %d blocks did not erase", failed); else say("OK");
 }
+static void cmd_check(const char *name)
+{
+    struct part *p = find(name);
+    unsigned long off; int fd, data = 0, failed = 0, n = 0;
+    if (!p) { say("ERR no partition %s", name); return; }
+    fd = open(p->dev, O_RDONLY);
+    if (fd < 0) { say("ERR open %s: %s", p->name, strerror(errno)); return; }
+    /* the whole partition, but one block that does not read settles it */
+    for (off = 0; off < p->size && !failed; off += p->erasesize, n++) {
+        if (is_bad(fd, off)) continue;
+        if (read_block(fd, p, off, block)) failed++;
+        else if (!all_ff(block, p->erasesize)) data++;
+        progress(off + p->erasesize, p->size);
+    }
+    close(fd);
+    say("OK %d %d", data, failed);
+}
+/* ---- small files in a jffs2 partition ---- */
+#define FILEMAX 65536
+static unsigned char filebuf[FILEMAX];
+/* The place of <path> in partition p: mounted on the device, a plain directory in a test. */
+static int fs_open(struct part *p, int rw, const char *path, char *full, size_t max)
+{
+    if (strstr(path, "..") || path[0] == '/' || !path[0]) { errno = EINVAL; return -1; }
+    if (fake) {
+        snprintf(full, max, "%s/fs-%s", fake, p->name);
+        if (rw) mkdir(full, 0755);
+        snprintf(full, max, "%s/fs-%s/%s", fake, p->name, path);
+        return 0;
+    } else {
+        int idx;
+        if (sscanf(p->dev, "/dev/mtd%d", &idx) != 1) { errno = ENODEV; return -1; }
+        unlink("/dev/j49blk");
+        if (mknod("/dev/j49blk", S_IFBLK | 0600, (dev_t)((31 << 8) | idx))) return -1;   /* mtdblock<idx> */
+        mkdir("/j49fs", 0755);
+        if (mount("/dev/j49blk", "/j49fs", "jffs2", rw ? 0 : MS_RDONLY, NULL)) return -1;
+        snprintf(full, max, "/j49fs/%s", path);
+        return 0;
+    }
+}
+static void fs_close(void)
+{
+    if (fake) return;
+    sync();
+    umount("/j49fs");
+    unlink("/dev/j49blk");
+}
+static void cmd_get(const char *name, const char *path)
+{
+    struct part *p = find(name);
+    char full[400]; int fd; ssize_t n;
+    if (!p) { say("ERR no partition %s", name); return; }
+    if (fs_open(p, 0, path, full, sizeof full)) { say("ERR no file system in %s: %s", name, strerror(errno)); return; }
+    fd = open(full, O_RDONLY);
+    n = fd < 0 ? -1 : read(fd, filebuf, FILEMAX);
+    if (fd >= 0) close(fd);
+    fs_close();
+    if (n < 0) { say("ERR no file %s in %s", path, name); return; }
+    say("DATA %ld", (long)n);
+    put(filebuf, (size_t)n);
+    say("SUM %08lx", crc_add(0, filebuf, (unsigned long)n));
+    say("OK");
+}
+static void cmd_put(const char *name, const char *path, unsigned long length)
+{
+    struct part *p = find(name);
+    char full[400], *q; unsigned long at; int fd, bad = 0;
+    if (!p) { say("ERR no partition %s", name); return; }
+    if (length == 0 || length > FILEMAX) { say("ERR length"); return; }
+    say("READY %d", CHUNK);
+    for (at = 0; at < length; at += CHUNK) {
+        if (get(filebuf + at, length - at < CHUNK ? length - at : CHUNK)) return;
+        put("+", 1);
+    }
+    if (fs_open(p, 1, path, full, sizeof full)) { say("ERR no file system in %s: %s", name, strerror(errno)); return; }
+    /* the directories on the way */
+    for (q = strchr(full + (fake ? strlen(fake) + 1 : 7), '/'); q; q = strchr(q + 1, '/')) { *q = 0; mkdir(full, 0755); *q = '/'; }
+    fd = open(full, O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0 || write(fd, filebuf, length) != (ssize_t)length) bad = errno ? errno : EIO;
+    if (fd >= 0) { if (!fake) fsync(fd); close(fd); }
+    /* what is there now */
+    if (!bad) {
+        fd = open(full, O_RDONLY);
+        memset(filebuf, 0, length);
+        if (fd < 0 || read(fd, filebuf, length) != (ssize_t)length) bad = EIO;
+        if (fd >= 0) close(fd);
+    }
+    fs_close();
+    if (bad) { say("ERR write %s in %s: %s", path, name, strerror(bad)); return; }
+    say("SUM %08lx", crc_add(0, filebuf, length));
+    say("OK");
+}
 static void cmd_write(const char *name, unsigned long length, const char *mode)
 {
     struct part *p = find(name);
@@ -711,6 +816,14 @@ int main(int argc, char **argv)
         else if (!strcmp(cmd, "INFO")) cmd_info();
         else if (!strcmp(cmd, "READ") && k >= 2) cmd_read(a);
         else if (!strcmp(cmd, "ERASE") && k >= 2) cmd_erase(a);
+        else if (!strcmp(cmd, "CHECK") && k >= 2) cmd_check(a);
+        else if (!strcmp(cmd, "GET") || !strcmp(cmd, "PUT")) {
+            char part[64] = "", path[160] = ""; unsigned long len = 0;
+            int m = sscanf(line, "%*s %63s %159s %lu", part, path, &len);
+            if (cmd[0] == 'G' && m >= 2) cmd_get(part, path);
+            else if (cmd[0] == 'P' && m == 3) cmd_put(part, path, len);
+            else say("ERR bad command");
+        }
         else if (!strcmp(cmd, "WRITE") && k == 4) cmd_write(a, n, c);
         else if (!strcmp(cmd, "REBOOT")) {
             int marked = 0;

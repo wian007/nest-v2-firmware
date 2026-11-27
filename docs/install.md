@@ -4,14 +4,20 @@ How to put the J49 software on a Nest Learning Thermostat of the 2nd generation,
 back. Read the [disclaimer](../DISCLAIMER.md) first: this replaces the firmware and the device
 switches real heating.
 
-**Status of this guide (27 November 2026).** The install described here was done on one
-thermostat, from start to a running system. From the installer page itself: the loaders, the
-service kernel with our own screen, the check that it is a 2nd generation thermostat, a backup
-of the whole flash memory that checks out (256 MB in about 9 minutes), writing the boot loader,
-and writing the kernel. The last step, sending the root file system, was done on that
-thermostat with the same protocol from a PC; **the page has not yet done that step itself in
-its present form.** Putting a backup back was not yet done on a device. When something does not
-work, the ring gesture always brings the thermostat back to step 2.
+**Status of this guide (27 November 2026).** Done on thermostats so far:
+
+- A full install from the page, from the ring gesture to the running system, with the WiFi
+  setup hotspot coming up after it.
+- Putting a backup back from the page: a thermostat on which an earlier install had failed was
+  brought back to the stock firmware with its backup.
+- Steps from Chrome on an Android phone.
+- The same on a second thermostat that still had all its stock data. An earlier version of
+  the installer failed there: the new system cannot read the partitions the stock firmware
+  wrote (another error correction layout). The installer now fetches the WiFi calibration and
+  erases the partition `scratch` while the stock kernel still runs; with that it installed.
+
+Make the backup first: it is what brought that thermostat back. The ring gesture always
+brings the thermostat back to step 2.
 
 ## What you need
 
@@ -90,7 +96,7 @@ works. That was tried several times, also with a boot loader that did not start.
   `http://192.168.4.1/`, choose "Log in" and confirm the code on the thermostat with the ring.
   Add your network in the WiFi block of the page. The hotspot then closes and the thermostat
   joins your network. The hotspot also opens when the thermostat could not join any of its
-  networks for five minutes. *(Written on 27 November 2026; not yet tried on a device.)*
+  networks for five minutes.
 
   The other way is the USB serial console (115200 baud; `screen /dev/ttyACM0 115200` on Linux,
   PuTTY on Windows). Log in as `root` and write the network into

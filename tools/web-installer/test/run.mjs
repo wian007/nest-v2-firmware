@@ -116,6 +116,13 @@ assert.equal(crc32(new TextEncoder().encode("123456789")), 0xcbf43926);
   await assert.rejects(svc.writeImage("spl0", rnd(5 * ERASE)), /larger than the partition/);
   await assert.rejects(svc.writeImage("nope", rnd(10)), /no partition/);
 
+  // a small file into a partition's file system and out again; whose data a partition holds
+  const nvs = rnd(912);
+  assert.equal(await svc.getFile("root0", "x/nvs.bin"), null);
+  await svc.putFile("root0", "x/nvs.bin", nvs);
+  assert(same(await svc.getFile("root0", "x/nvs.bin"), nvs));
+  assert.deepEqual(await svc.check("spl1"), { data: 2, failed: 0 });
+
   // the backup back: everything is as it was, the loader partition was not written
   writeFileSync(join(dir, "ipl"), Buffer.alloc(2 * ERASE, 0xaa));   // if it were written, this would change
   for await (const p of readBackup(fileReader())) {
