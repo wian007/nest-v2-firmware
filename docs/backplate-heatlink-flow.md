@@ -176,6 +176,12 @@ holds no text about a safety temperature. So on this hardware there is no frost 
 the backplate, and no upper limit either: frost protection is only what `bpd` does while the
 head unit runs.
 
+The same holds for the two other images in the plist, `BP_D2` and `BP_D2D` 4.2.8 (the US
+backplates, inferred): their tables send 0x89 to the unknown branch too. `BP_D2` handles exactly
+the ids of `AMBER_BP` (81-86, 8f, 90-93, 98, 99, 9b-9f, a1-a4, b1-b3, b5-ba, c0, c2, c3);
+`BP_D2D` adds c4 and c5. Which backplate acts on 0x89, if any, is unknown. The US and EU sides
+next to each other are on the wiki page "Models, heating and cooling" of cuckoo-wiki.
+
 ### What this backplate does have: a watchdog on the head unit (observed)
 
 - Every `0xa1` (the quiet message, also `bpd`'s keep-alive) loads a countdown with
