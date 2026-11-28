@@ -117,7 +117,7 @@ async function showRelease() {
   const body = $("rel-body"); body.textContent = "";
   let list = null, pre = null;
   for (const raw of String(r.body || "").split(/\r?\n/)) {
-    const line = raw.trimEnd();
+    const line = raw.trimEnd().replace(/^>\s?/, "");     // a quoted block reads as ordinary text here
     const add = (tag, text) => { const e = document.createElement(tag); e.textContent = plain(text); return e; };
     if (line.startsWith("|")) {                       // a table: as it is, in a fixed-width block
       if (/^\|[\s:|-]+\|$/.test(line)) continue;
@@ -130,7 +130,8 @@ async function showRelease() {
     else if (line.trim()) { body.append(add("p", line)); list = null; }
     else list = null;
   }
-  $("rel-name").textContent = (r.name || rel.tag) + (r.prerelease ? " (pre-release)" : "");
+  const name = r.name || rel.tag;
+  $("rel-name").textContent = name + (r.prerelease && !/pre-release/i.test(name) ? " (pre-release)" : "");
   const url = String(r.html_url || "");
   if (url.startsWith("https://github.com/")) $("rel-link").href = url; else $("rel-link").hidden = true;
   $("s-release").hidden = false;
