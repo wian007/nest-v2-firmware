@@ -57,7 +57,10 @@ pre{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding
 a{color:var(--info)}
 #thanks li{font-size:14px}
 [hidden]{display:none!important}
-#s-support summary { cursor: pointer; font-weight: 600; }
+#s-support summary, #s-release summary { cursor: pointer; font-weight: 600; }
+.rel h3 { font-size: 1em; margin: 14px 0 4px; }
+.rel p, .rel li { margin: 4px 0; }
+.rel pre { overflow-x: auto; font-size: .85em; margin: 6px 0; white-space: pre; }
 .scroll { overflow-x: auto; }
 table.sup { border-collapse: collapse; width: 100%; margin: 12px 0 4px; font-size: .95em; }
 table.sup th, table.sup td { text-align: left; vertical-align: top; padding: 6px 10px 6px 0; border-bottom: 1px solid color-mix(in srgb, currentColor 18%, transparent); }
@@ -74,6 +77,14 @@ table.sup tbody th { font-weight: 600; white-space: nowrap; }
 <section class="warn" id="nobrowser" hidden><p data-t="nobrowser"></p></section>
 <section class="warn" id="insecure" hidden><p data-t="insecure"></p></section>
 
+<section id="s-release" hidden>
+  <details open>
+    <summary><span data-t="rel.title"></span>: <b id="rel-name"></b></summary>
+    <div id="rel-body" class="rel"></div>
+    <p class="note"><a id="rel-link" target="_blank" rel="noopener" data-t="rel.more"></a></p>
+  </details>
+</section>
+
 <section id="s-support">
   <details>
     <summary data-t="sup.title"></summary>
@@ -85,7 +96,7 @@ table.sup tbody th { font-weight: 600; white-space: nowrap; }
 
 <section class="warn" id="s-warn">
   <h2 data-t="warn.title"></h2>
-  <ul><li data-t="warn.1"></li><li data-t="warn.2"></li><li data-t="warn.3"></li><li data-t="warn.4"></li></ul>
+  <ul><li data-t="warn.1"></li><li data-t="warn.2"></li><li data-t="warn.3"></li><li data-t="warn.4"></li><li data-t="warn.5"></li></ul>
   <p class="note" id="windows" data-t="windows" hidden></p>
   <label class="check"><input type="checkbox" id="agree"><span data-t="warn.agree"></span></label>
 </section>

@@ -128,3 +128,6 @@ sup.other=iPhone en iPad; Firefox; Safari
 sup.other.s=Werkt niet
 sup.other.n=Deze hebben geen WebUSB. Op een iPhone of iPad heeft geen enkele browser het.
 sup.cable=Gebruik een USB-kabel die data doorgeeft: veel micro-USB-kabels laden alleen. Sluit rechtstreeks aan, zonder hub, als iets niet werkt.
+warn.5=Werk in uitvoering: slapen werkt nog niet goed, en op een backplate loopt de accu van de thermostaat binnen ongeveer een nacht leeg. Voor proeven, of aan een USB-voeding.
+rel.title=Wat dit installeert
+rel.more=De release op GitHub
