@@ -49,8 +49,8 @@ sleep are the open problems; [docs/sleep-j49.md](docs/sleep-j49.md) says what is
 is being tried.
 
 Works on the device: everything in the table above, the installer, and updates over USB (DFU)
-without opening anything. It hangs on a real backplate and controls real heating since
-27 November 2026.
+without opening anything. Since 27 November 2026 it runs with us as a trial on a real backplate
+with a Heat Link: it does switch the heating, but it does not hold out there (see the top).
 
 Open or not verified: how long it can sleep and what that saves (two power domains do not reach
 retention), a kernel panic when the backplate serial port is reopened in one specific situation,
