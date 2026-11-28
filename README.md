@@ -4,6 +4,21 @@ A second-generation Nest thermostat (board name J49: TI OMAP3630, 64 MB RAM, rou
 that runs a current Linux and our own thermostat software instead of the stock firmware. No cloud:
 it controls the heating by itself, and it is reached over the home network.
 
+> [!CAUTION]
+> ## Not ready for production: on a backplate the battery runs empty
+>
+> **Do not put this on the thermostat that heats your house.** State on 28 November 2026:
+>
+> - **The battery runs empty within about a night** when the thermostat sits on its backplate.
+>   The backplate supplies less than the head unit uses, and our sleep does not make up for it.
+>   When the battery is empty the thermostat goes off, and the heating with it.
+> - **Sleeping is not reliable.** After some wake-ups the thermostat loses WiFi and stays
+>   unreachable until it restarts.
+> - The stock firmware has neither problem. A backup made with the installer brings it back.
+>
+> It is fit for experiments, and for a thermostat on a USB supply. Work on this is going on:
+> [what is known](docs/sleep-j49.md).
+
 <p>
 <img src="docs/img/home.png" width="190" alt="The dial: target and room temperature">
 <img src="docs/img/menu.png" width="190" alt="Menu">
@@ -29,17 +44,9 @@ Heating is off until it is switched on (`mode=off`). Sleeping is on unless it is
 
 ## Status
 
-> **Work in progress, and not fit for daily use on a backplate yet (28 November 2026).**
-> - **Sleeping does not work well.** After some wake-ups the power chip stops answering; the
->   thermostat then loses WiFi and stays unreachable until it restarts. A check that restarts
->   it in that case is written; the cause in the kernel is not found.
-> - **On a backplate the battery runs empty.** The backplate supplies less than the head unit
->   uses while it is awake, and the sleep is not deep enough and too often broken to make up
->   for it: within about a night the thermostat goes off. The stock firmware does not have
->   this problem.
-> - Until this is solved: for experiments, or on a USB supply.
->
-> What is known and what is being tried: [docs/sleep-j49.md](docs/sleep-j49.md).
+**Not ready for production: see the warning at the top.** The battery on a backplate and the
+sleep are the open problems; [docs/sleep-j49.md](docs/sleep-j49.md) says what is known and what
+is being tried.
 
 Works on the device: everything in the table above, the installer, and updates over USB (DFU)
 without opening anything. It hangs on a real backplate and controls real heating since
