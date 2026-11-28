@@ -18,8 +18,14 @@ software does not have, or has not shown to work. Do not rely on it where a fail
 harm, and do not leave it unattended until you have watched it work in your own installation,
 including what happens when it loses power or its network.
 
-Known at the time of writing: on a real backplate the thermostat's battery can drain when the
-head unit does not sleep enough, and the head unit then switches off. See `docs/sleep-j49.md`.
+Known on 28 November 2026: on a real backplate the battery of the thermostat runs empty
+within about a night, and sleeping is not reliable. The head unit then switches off, and the
+heating with it. See `docs/sleep-j49.md`.
+
+Only the UK/EU backplate with a Heat Link is supported, for heating only. On that backplate
+there is no frost protection and no upper temperature limit in the backplate itself: both
+exist only while the head unit runs (read from the backplate firmware, see
+`docs/backplate-heatlink-flow.md`).
 
 ## It replaces the firmware of your thermostat
 

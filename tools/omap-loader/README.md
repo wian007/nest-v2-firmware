@@ -45,17 +45,20 @@ installed -- it already covers this tool too.
 
 ## Getting x-load.bin / u-boot.bin / a kernel
 
-These are NOT built or vendored here (they're not generic -- x-load needs a
-J49-specific config, and the kernel is whatever you want to boot). Two
-sources in this workspace:
+These are not built here (they're not generic -- x-load needs a
+J49-specific config, and the kernel is whatever you want to boot). `x-load.bin`
+and `u-boot.bin` as the installer uses them are in `tools/dfu-install/nest-dfu/`
+(see its README for who made them). The installer page (`docs/install.md`) does
+the same push from the browser. Other sources:
 
-- `~/Projects/j49-dfu-attack` (a local fork of the original GTVHacker
-  NestDFUAttack): `Release/Nest/{x-load.bin,u-boot.bin,uImage}` are prebuilt
+- GTVHacker's NestDFUAttack (<https://github.com/gtvhacker/NestDFUAttack>):
+  `Release/Nest/{x-load.bin,u-boot.bin,uImage}` are prebuilt
   for the J49 (`j49-usb-loader_config`). `Release/Nest/rescueUImage` is a
   second kernel target from the same build. The initramfs these kernels boot
   (`Dev/root/etc/init.d/rootme`) has been pared down to just start a root
   shell on the USB gadget console (`ttyGS0`/`ttyGS0` -> `/dev/ttyACM*` on the
-  host) -- no dropbear, no network, no cloud/config edits. That's what makes
+  host) -- no dropbear, no network, no cloud/config edits (this was done in a
+  copy of that tree that is not published). That's what makes
   it safe to use for a quick recovery shell: it's RAM-only until *you*
   explicitly mount and write something.
 - `tools/kernel-firstlight/build.sh` builds our own mainline 6.6 kernel +

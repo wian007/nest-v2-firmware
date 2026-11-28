@@ -1,5 +1,12 @@
 # Modernizing the Nest J49 to a current Yocto stack
 
+> **History.** This is the plan of October 2026, with the state of the first weeks. It is
+> overtaken: the system is installed from a browser page ([install.md](install.md)), boots with
+> our own U-Boot, and there is no stock slot and no kexec step any more. The hardware table is
+> still right, except that the 802.15.4 radio is not the link to the backplate (that is a
+> serial line; the radio is in [em357-radio.md](em357-radio.md)). For the open work now, see
+> the roadmap in the [README](../README.md#roadmap).
+
 Goal: a fully modern image (recent LTS kernel, systemd, current glibc/poky) that
 boots on the physical Nest Learning Thermostat 2nd gen (J49).
 

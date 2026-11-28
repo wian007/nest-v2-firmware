@@ -9,6 +9,9 @@ a test report from your own thermostat.
   request what you tested and on what (a PC, the emulator, a thermostat), and what you did not
   test. "Not tested on a device" is a fine thing to write; leaving it out is not.
 - For anything larger than a fix, open an issue first, so nobody does work twice.
+- Only the UK/EU backplate with a Heat Link is supported, for heating only. The US backplates
+  and the other HVAC circuits are on the roadmap in the [README](README.md#roadmap); a test
+  report or a capture from such a backplate is welcome.
 
 ## Easy ways in
 
@@ -27,8 +30,8 @@ a test report from your own thermostat.
 - Everything in the repository is in English: code, comments, documents, commit messages.
 - Our own programs are small Rust programs without dependencies. They talk to each other
   through text files (`docs/thermostat.md`), not through each other's code. Keep it that way.
-- Heating is off and sleeping is off until the user switches them on. A change must not alter
-  that.
+- Heating is off until the user switches it on. Sleeping is on unless the user switches it
+  off. A change must not alter these defaults.
 - No secrets, addresses of your own network, serial numbers or backups in a commit.
   `tools/release/export-public.sh` checks for the common ones.
 - Files built by the maker of the thermostat do not go into the repository.

@@ -16,6 +16,13 @@ switches real heating.
   wrote (another error correction layout). The installer now fetches the WiFi calibration and
   erases the partition `scratch` while the stock kernel still runs; with that it installed.
 
+The installer page installs release `v2026.11.27-pre3`: that is the set of files these
+installs were done with. A release `v2026.11.27-pre4` exists; its files were not run on a
+thermostat as a set.
+
+This software is not ready for daily use: on a backplate the battery runs empty and sleeping
+is not reliable ([sleep-j49.md](sleep-j49.md)).
+
 Make the backup first: it is what brought that thermostat back. The ring gesture always
 brings the thermostat back to step 2.
 
@@ -23,6 +30,9 @@ brings the thermostat back to step 2.
 
 - A Nest Learning Thermostat, **2nd generation** (board "J49", shown as Display-2.x under
   Settings > Technical info). Other models have other hardware; do not try this on them.
+- For heating: the **UK/EU backplate with a Heat Link** (shown as Backplate-3.x). The software
+  switches heat only, through the Heat Link. The US backplates, cooling, fan, heat pump and hot
+  water are not supported. Both thermostats that were installed are of the UK/EU kind.
 - A USB cable that carries data (micro-USB; many cables only charge) and a computer with
   **Chrome or Edge** (Windows, Linux, macOS, ChromeOS). Firefox and Safari have no WebUSB.
 - The image files (see "The files" below).
@@ -89,7 +99,8 @@ works. That was tried several times, also with a boot loader that did not start.
 
 ## After the install
 
-- Heating is **off** until you switch it on. Sleeping is on; switch it off on the web page when you do not want it.
+- Heating is **off** until you switch it on. Sleeping is on; the web page has the switch, and
+  it warns when you switch sleeping off (on a backplate the battery then runs empty faster).
 - **WiFi.** A thermostat without a network opens a WiFi hotspot of its own, about half a
   minute after it started. Its screen shows the name (`J49-setup-` and four characters) and
   the address. Connect a phone or laptop to that network (it has no password), open
@@ -114,6 +125,13 @@ works. That was tried several times, also with a boot loader that did not start.
   root account, meant for a home network.
 - Everything else: [thermostat.md](thermostat.md), [home-assistant.md](home-assistant.md).
 
+## Updates after the install
+
+- Over the network: [update.md](update.md) (`j49-update`). Tested on a PC only, not yet on a
+  thermostat. It does not update the kernel.
+- The kernel, over USB without the ring gesture:
+  [update-from-linux.md](../tools/dfu-install/update-from-linux.md).
+
 ## Back to stock
 
 Choose **Restore** on the page and give it the backup file of this thermostat. Steps 1 to 3
@@ -125,8 +143,12 @@ thermostat it was made on.
 
 The installer page on <https://wian007.github.io/nest-v2-firmware/> loads the image files by
 itself. The same files, with checksums and a notice of makers, licences and sources, are a
-[release](https://github.com/wian007/nest-v2-firmware/releases) of the project. To build them
-yourself:
+[release](https://github.com/wian007/nest-v2-firmware/releases) of the project. The first five
+files of the table are also in the repository (`tools/dfu-install/nest-dfu/x-load.bin` and
+`u-boot.bin`, `tools/dfu-install/payload/nest-service-uImage`,
+`tools/dfu-install/uboot/out/u-boot-nest-j49.uimg`,
+`tools/dfu-install/installer/out/uImage-j49-a`); the root file system is only a file of a
+release. To build them yourself:
 
 | File | What | From |
 |---|---|---|

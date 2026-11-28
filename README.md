@@ -19,6 +19,23 @@ it controls the heating by itself, and it is reached over the home network.
 > It is fit for experiments, and for a thermostat on a USB supply. Work on this is going on:
 > [what is known](docs/sleep-j49.md).
 
+## Supported hardware
+
+At the moment **only the UK/EU version** of the 2nd-generation thermostat is supported:
+
+- The backplate that connects with **two wires (T1/T2) to a Heat Link**. Its firmware is
+  `AMBER_BP 1.0.26`; the thermostat shows it as Backplate-3.x.
+- **Heating only**, with one switch circuit: heat on or heat off through the Heat Link.
+
+Not supported:
+
+- The **US backplates**, where the wires go straight to the HVAC equipment. Their firmware
+  (`BP_D2`, `BP_D2D`) was only read, not run with our software.
+- **Cooling, fan, heat pump, hot water**, and every other circuit than the one for heat.
+
+The details are in [docs/backplate-heatlink-flow.md](docs/backplate-heatlink-flow.md). What may
+come later is in the [roadmap](#roadmap).
+
 <p>
 <img src="docs/img/home.png" width="190" alt="The dial: target and room temperature">
 <img src="docs/img/menu.png" width="190" alt="Menu">
@@ -34,11 +51,12 @@ it controls the heating by itself, and it is reached over the home network.
 
 | | |
 |---|---|
-| **Heating** | Reads temperature, humidity, motion and light from the backplate and switches the Heat Link through it. Hysteresis, minimum on/off times (boiler or valve), frost protection, a week schedule, away mode. |
+| **Heating** | Heating only, through a Heat Link ([supported hardware](#supported-hardware)). Reads temperature, humidity, motion and light from the backplate and switches the Heat Link through it. Hysteresis, minimum on/off times (boiler or valve), frost protection, a week schedule, away mode. |
 | **Screen** | A dial like the thermostat card of Home Assistant: target and room temperature, what the heating does, clock, WiFi. The ring sets the temperature; a click opens a menu for mode, schedule, away, status and settings. English or Dutch. |
 | **Web page** | `http://<device>/`: temperature, away, schedule editor, MQTT broker, WiFi networks, device settings. Login has no password: the browser shows a code and somebody confirms it on the device with the ring. |
 | **Home Assistant** | MQTT with discovery: a climate entity, sensors, the schedule per day and as JSON, away, volume, brightness, sleep state, tunes on the piezo. |
-| **Sleep** | Suspends when idle. The backplate wakes it (timer, temperature, motion); the WiFi chip wakes it for MQTT, the web page and SSH. On unless switched off. |
+| **Sleep** | Suspends when idle, also while the heat is on (the backplate holds the switch). The backplate wakes it (timer, temperature, motion near the device); the WiFi chip wakes it for MQTT, the web page and SSH. On unless switched off. Not reliable yet: see the warning at the top. |
+| **WiFi setup** | A thermostat without a network opens a hotspot `J49-setup-XXXX`; the home network is added on the web page. |
 
 Heating is off until it is switched on (`mode=off`). Sleeping is on unless it is switched off.
 
@@ -48,30 +66,62 @@ Heating is off until it is switched on (`mode=off`). Sleeping is on unless it is
 sleep are the open problems; [docs/sleep-j49.md](docs/sleep-j49.md) says what is known and what
 is being tried.
 
-Works on the device: everything in the table above, the installer, and updates over USB (DFU)
-without opening anything. Since 27 November 2026 it runs with us as a trial on a real backplate
-with a Heat Link: it does switch the heating, but it does not hold out there (see the top).
+Done on a thermostat:
 
-Open or not verified: how long it can sleep and what that saves (two power domains do not reach
-retention), a kernel panic when the backplate serial port is reopened in one specific situation,
-the 802.15.4 radio (it runs Nest's own stack, not Thread or Zigbee; only explored), and long
-runs in general. Each document below says what was checked and what was not.
+- Everything in the table above. Since 27 November 2026 it runs with us as a trial on a real
+  backplate with a Heat Link: it does switch the heating, but it does not hold out there (see
+  the top).
+- The install from the [installer page](docs/install.md) in the browser, on two thermostats,
+  also from Chrome on an Android phone. Putting a backup back was done once.
+- The kernel update over USB (DFU) from the running system, without the ring gesture.
+- Adding the home network through the WiFi setup hotspot.
+
+The installer page installs release `v2026.11.27-pre3`. A release `v2026.11.27-pre4` exists,
+but its files were not run on a thermostat as a set.
+
+Tested on a PC only, not on a thermostat: updates over the network
+([docs/update.md](docs/update.md)).
+
+Open or not verified:
+
+- Sleep. After some wake-ups the bus to the power chip is stuck and WiFi is lost until a
+  restart. The WiFi chip is restarted by its driver on most wake-ups; the cause is not found.
+  The core power domain does not reach its low state, so a sleep saves less than it should.
+- A kernel panic when the backplate serial port is reopened in one specific situation.
+- The 802.15.4 radio (it runs Nest's own stack, not Thread or Zigbee; only explored).
+- Long runs in general.
+
+Each document below says what was checked and what was not.
+
+## Roadmap
+
+A list of open work, without dates and without promises.
+
+- Sleep that is reliable, and a battery that holds on a backplate.
+- The MQTT connection kept alive in the WiFi chip, so the head unit does not wake for it (the
+  stock firmware does this for its own connection).
+- Updates over the network run on a thermostat, and a signature on the images.
+- The installer on Windows without Zadig.
+- A kernel update without USB.
+- US backplates (wires straight to the HVAC equipment).
+- Cooling, and the other HVAC circuits: fan, heat pump, hot water.
 
 ## The parts
 
 | Program | Role | Details |
 |---|---|---|
 | `bpd` | Talks to the backplate over the serial line; the thermostat control loop | [thermostat](docs/thermostat.md), [protocol](docs/backplate-protocol.md), [Heat Link](docs/backplate-heatlink-flow.md) |
-| `j49-screen` | The panel, the ring, the piezo | [thermostat](docs/thermostat.md) |
+| `j49-screen` | The panel, the ring, the piezo. A library with a small program, so a [skin of your own](docs/thermostat.md#a-skin-of-your-own) can replace screens | [thermostat](docs/thermostat.md) |
 | `j49-web` | Web page on port 80 | [thermostat](docs/thermostat.md#web-page-j49-web) |
 | `j49-mqtt` | MQTT and Home Assistant discovery | [thermostat](docs/thermostat.md#home-assistant-j49-mqtt), [cards](docs/home-assistant.md) |
 | `j49-sleep` | Decides when to suspend | [sleep](docs/sleep-j49.md) |
-| `j49-wifi` | Opens a WiFi hotspot for setup when there is no network | [thermostat](docs/thermostat.md#wifi-setup-hotspot-j49-wifi) |
+| `j49-wifi` | Opens a WiFi hotspot for setup when no network is configured, or from Settings on the device | [thermostat](docs/thermostat.md#wifi-setup-hotspot-j49-wifi) |
+| `j49-update` | Installs a new root file system over the network (tested on a PC only) | [updates](docs/update.md) |
 | `j49-dfu` | Reboots into the U-Boot download mode | [updating](tools/dfu-install/update-from-linux.md) |
 
 They are small Rust programs without a framework, and they do not call each other. The interface
 is a handful of text files: settings in `/var/lib/j49/` (`thermostat`, `schedule`, `mqtt.conf`,
-`sleep`), state in `/run/` (`/run/bpd/heat`, `/run/bpd/sht20`, ...). `bpd` is the only one that
+`sleep`, `update`), state in `/run/` (`/run/bpd/heat`, `/run/bpd/sht20`, `/run/bpd/power`, ...). `bpd` is the only one that
 decides about heat; the others read state and write settings. The formats are in
 [docs/thermostat.md](docs/thermostat.md).
 
@@ -99,11 +149,16 @@ Yocto release: blacksail. Layers: openembedded-core, meta-yocto, meta-openembedd
 
 - **First install on a stock Nest:** [docs/install.md](docs/install.md). An installer page in the
   browser (Chrome or Edge, over USB) makes a full backup, writes the boot loader and installs
-  the system; it can also put the backup back. The same steps with command-line tools are in
-  [tools/dfu-install/README.md](tools/dfu-install/README.md).
-- **Update a running device:** [tools/dfu-install/update-from-linux.md](tools/dfu-install/update-from-linux.md).
-  A new root filesystem goes to the other slot over WiFi; the kernel is written over USB, without
-  the ring gesture. When the kernel stays the same, the files that differ can be copied over WiFi.
+  the system; it can also put the backup back. The first, command-line route is in
+  [tools/dfu-install/README.md](tools/dfu-install/README.md): it is kept for its hardware
+  notes and is not the way to install now.
+- **Update over the network:** [docs/update.md](docs/update.md). `j49-update` writes a new root
+  file system into the other slot and starts it as a trial. Tested on a PC only, not yet on a
+  thermostat. The kernel is not part of it.
+- **Update by hand:** [tools/dfu-install/update-from-linux.md](tools/dfu-install/update-from-linux.md).
+  The kernel is written over USB, without the ring gesture. A root file system can be written
+  to the other slot over WiFi. When the kernel stays the same, the files that differ can be
+  copied over WiFi.
 - **What a new root filesystem must get back:** the WiFi configuration and the calibration file
   with the MAC address (kept on the scratch partition and restored at boot), and the settings in
   `/var/lib/j49` and `/var/lib/j49-screen`.
@@ -135,6 +190,7 @@ tools/j49-web        web page
 tools/j49-mqtt       MQTT / Home Assistant
 tools/j49-sleep      sleep manager
 tools/j49-wifi       WiFi setup hotspot
+tools/j49-update     updates over the network
 tools/j49-dfu        reboot into DFU
 tools/j49-ncp        read-only tool for the 802.15.4 radio's bootloader
 tools/lang          texts per language (screen and web page)
@@ -151,6 +207,7 @@ docs/                see below
 | Document | About |
 |---|---|
 | [docs/install.md](docs/install.md) | Installation guide: install, backup, back to stock |
+| [docs/update.md](docs/update.md) | Updates over the network: slots, releases, repositories |
 | [docs/thermostat.md](docs/thermostat.md) | Settings and state files, the control loop, the screen, the web page, MQTT topics |
 | [docs/home-assistant.md](docs/home-assistant.md) | Entities and dashboard cards |
 | [docs/backplate-protocol.md](docs/backplate-protocol.md) | Serial protocol of the backplate, handshake, sensor frames |
@@ -178,8 +235,9 @@ licences of those projects (GPL-2.0). See the [disclaimer](DISCLAIMER.md).
 
 - No secrets are in this repository. WiFi and broker credentials live on the device only.
 - The full backup of the stock firmware is kept outside git. The five images the installer uses
-  are in the repository as they were in the last release: the two loaders of the USB boot chain,
-  the service kernel, our kernel and our U-Boot
-  ([who made them, licences, sources](tools/web-installer/images-notice.md)).
-- This is a hobby project on one model of thermostat. It switches real heating: read
+  are in the repository: the two loaders of the USB boot chain, the service kernel, our kernel
+  and our U-Boot ([who made them, licences, sources](tools/web-installer/images-notice.md)).
+  The root file system is only a file of a release.
+- This is a hobby project on one model of thermostat, with the UK/EU backplate and a Heat
+  Link. It switches real heating: read
   [docs/backplate-heatlink-flow.md](docs/backplate-heatlink-flow.md) before trusting it with yours.

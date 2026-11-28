@@ -7,7 +7,12 @@ holds stock firmware). Contrast with USB peripheral boot (tools/omap-usbboot),
 which needs one physical trigger and is kept as the unbrick safety net.
 
 Verified working on the stock `Nest-Learning-Thermostat-5.9.4-5-j49` (kernel
-2.6.37, `CONFIG_KEXEC=y`). See [[nest-v2-device-profile]] for device access.
+2.6.37, `CONFIG_KEXEC=y`).
+
+This page is from the bring-up (October 2026): kexec from the **stock** firmware. A thermostat
+with our system installed has no stock firmware to start from. On our own system, a test kernel
+started with `kexec` did run, but it was unreliable (WiFi could not authenticate for minutes;
+one kernel hung at its first suspend). It is not a supported way to start or update a kernel.
 
 ## 1. Build a static ARM `kexec` (no device toolchain needed)
 

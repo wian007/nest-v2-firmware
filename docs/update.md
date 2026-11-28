@@ -29,7 +29,9 @@ The record is one line of text: `J49SLOT1 active=<0|1> try=<0|1|-> left=<n> sum=
 Without a record the kernel command line decides, as before.
 
 **The kernel is not part of this.** It sits in `boot0`, has no second copy, and is updated over
-USB ([updating](../tools/dfu-install/update-from-linux.md)). A release whose system needs a newer
+USB ([updating](../tools/dfu-install/update-from-linux.md)). The reason: U-Boot reads `boot0`,
+and U-Boot and our kernel use different ECC layouts, so what our kernel writes there U-Boot
+cannot read ([flash-layout.md](flash-layout.md)). `boot0` must be written by U-Boot. A release whose system needs a newer
 kernel cannot say so yet.
 
 ## Versions and repositories
@@ -84,3 +86,5 @@ repositories.
 - The image is checked against `SHA256SUMS` of the same release: there is no signature yet, so
   whoever controls the repository controls the update.
 - No update entity in Home Assistant yet.
+- No update of the kernel (see above).
+- It was not run on a thermostat yet.

@@ -70,8 +70,10 @@ cooltime, reason, ocevents, pwrevents)"), `MSG_IPS_STATUS`, `MSG_WAKEUP`, `MSG_W
 The dispatch goes through an internal event number, not the wire type, so the type codes are not
 read from the code yet. Matched by payload length against our captures (inferred): `0x0004` =
 WIRES (13), `0x0009` = PINS (15, "pin state: 15 values"), `0x000a` = ALS (4), `0x000c` = SENSOR
-(14), `0x0010` = FW_ID (3), `0x0038` = PIR_DATA_2 (35), `0x002f` = END_BUF. `MSG_ACK_SWITCH` = `0x0006` (from the backplate firmware). Unknown: what `0x0005`, `0x0007`, `0x000b`, `0x0014`, `0x0017` are (the 1 Hz
-`0x0007` that we show as "motion" may be NEAR_PIR or PIR).
+(14), `0x0010` = FW_ID (3), `0x0038` = PIR_DATA_2 (35), `0x002f` = END_BUF. `MSG_ACK_SWITCH` = `0x0006` (from the backplate firmware). Unknown: what `0x0005`, `0x0007`, `0x0014`, `0x0017` are (the 1 Hz
+`0x0007` that we show as "motion" may be NEAR_PIR or PIR). `0x000b` is the state frame with the
+voltages, after the cuckoo-nest wiki: `bpd` writes them to `/run/bpd/power` (the scales were
+not checked against a meter).
 
 ## The flow
 
@@ -147,7 +149,9 @@ after the wire ACK, answered by `0x0006 00 <state>`.
 ## What happens to the heat when the head unit sleeps, hangs or dies (2026-11-28)
 
 Read from stock `nlclient` and from the backplate firmware AMBER_BP 1.0.26 (disassembly). Nothing
-of this section was tried on a device.
+of this section was tried on purpose on a device. One thing was seen later that day: a head unit
+that slept with the heat on, for up to 480 s at a time (`sleep-j49.md`). The watchdog that
+switches the heat off was not seen at work.
 
 ### The "safety temperature" message, 0x89 (observed in nlclient)
 

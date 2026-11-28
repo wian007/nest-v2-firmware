@@ -1,5 +1,29 @@
 # Nest J49 NAND flash layout
 
+> **How to read this page (28 November 2026).** The table below is the layout of the stock
+> firmware; our system uses the same partitions. The sections after it are the record of the
+> bring-up in the order it happened (October and November 2026). Many of them describe a state
+> that is overtaken: the stock A slot as a fallback, the B slot, kexec from stock, the plans.
+> They are kept as history. The state now, seen on devices unless said otherwise:
+>
+> - There are three ECC layouts on this flash: that of the stock firmware (BCH4, bytes 36..63
+>   of the OOB), that of our kernel (mainline `bch4`) and that of our U-Boot (BCH8). None of
+>   them reads what another wrote. Our kernel cannot read partitions the stock firmware
+>   wrote, and the reverse.
+> - So each partition has one writer: `spl0`/`spl1` are written under the stock service
+>   kernel (the stock x-loader reads them), `boot0` by our U-Boot over USB, `root0`, `root1`
+>   and `scratch` by our kernel.
+> - On a thermostat that still has its stock data, the installer fetches the WiFi calibration
+>   from `system-config` and erases `scratch` while the stock service kernel runs, because
+>   our kernel cannot do either afterwards ([install.md](install.md)).
+> - After an install there is no stock slot to fall back to: our U-Boot is in both boot loader
+>   partitions. The way back is the backup the installer made.
+> - Which root slot starts: a record in `env1`, read by `nandio`, the first program our kernel
+>   starts ([update.md](update.md); tested on a PC only). Without a record the kernel command
+>   line decides.
+> - The kernel in `boot0` can only be written by U-Boot over USB
+>   ([update-from-linux.md](../tools/dfu-install/update-from-linux.md)).
+
 Source: `/proc/mtd` on the live device (firmware 5.9.4-5-j49-0NXR), captured
 2026-10-25. NAND = 256 MB, erase block 0x20000 (128 KiB).
 
@@ -434,6 +458,11 @@ log over USB is wanted too (u-boot cannot use the USB gadget, so UART1 is the on
 way to see the bootloader).
 
 ## Planned: one ECC scheme (BCH8) for U-Boot and Linux
+
+Not done on 28 November 2026; the reason below still holds, and it is why a kernel update
+needs USB. One point is overtaken: since 27 November the kernel `uImage-j49-a` starts `nandio`
+first, and `nandio` can choose the root slot from a record in `env1` (see the top). Two kernel
+files are no longer the only way to choose a slot.
 
 State on 2026-11-26. U-Boot reads and writes NAND with BCH8 (`NAND_OMAP_ECCSCHEME_BCH8_CODE_HW_DETECTION_SW`),
 the kernel with `ti,nand-ecc-opt = "bch4"`. Neither can read what the other wrote. Consequences:

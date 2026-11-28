@@ -14,7 +14,8 @@
 // records what woke the board.
 //
 // Settings in /var/lib/j49/sleep (key=value): enabled=on|off, idle=<s awake after a wake, 20>,
-// max=<longest sleep in s, 1500>, motion=near|on|off: what movement wakes the head unit.
+// max=<longest sleep in s, 1500>, max_heat=<longest sleep while the mode is "heat", 300>,
+// motion=near|on|off: what movement wakes the head unit.
 // near (the default): only somebody close to the thermostat (the near sensor). on: also movement
 // anywhere in the room (the far sensor), which on a wall in a living room is most of the evening.
 // off: no movement at all, only the ring.
@@ -30,7 +31,7 @@ const RTC_ALARM: &str = "/sys/class/rtc/rtc0/wakealarm";
 /// it while the heat is on; the control loop must look again at least this often. The backplate
 /// is asked to wake us when the temperature changes, but how well it does that is not measured
 /// yet (the log line of every wake says what it saw); until then this stays short.
-const MAX_SLEEP_HEATING: u64 = 300;
+const MAX_SLEEP_HEATING: u64 = 300; // the default of max_heat=
 // wake mask bits of the backplate (docs/backplate-protocol.md)
 const WAKE_TIMER: u16 = 0x0001;
 const WAKE_TEMPERATURE: u16 = 0x0004;
@@ -61,6 +62,7 @@ struct Cfg {
     enabled: bool,
     idle: u64,
     max: u64,
+    max_heat: u64, // longest sleep while the mode is "heat"
     motion: bool,     // any movement sensor wakes
     motion_far: bool, // also the far one (the whole room)
 }
@@ -70,6 +72,7 @@ fn read_cfg() -> Cfg {
         enabled: m.get("enabled").map(|v| v == "on").unwrap_or(true),
         idle: num(&m, "idle").unwrap_or(20).clamp(10, 600),
         max: num(&m, "max").unwrap_or(1500).clamp(30, 1500),
+        max_heat: num(&m, "max_heat").unwrap_or(MAX_SLEEP_HEATING).clamp(60, 1500),
         motion: m.get("motion").map(|v| v != "off").unwrap_or(true),
         motion_far: m.get("motion").map(|v| v == "on").unwrap_or(false),
     }
@@ -137,7 +140,7 @@ fn blocker(c: &Cfg, awake_since: Instant) -> Result<u64, &'static str> {
                 return Err("heat");
             }
             if heat.get("mode").map(|m| m == "heat").unwrap_or(false) {
-                secs = secs.min(MAX_SLEEP_HEATING);
+                secs = secs.min(c.max_heat);
             }
         }
         // bpd is not running or stuck: do not sleep on top of that
@@ -284,8 +287,12 @@ fn sleep_once(c: &Cfg, secs: u64) -> Option<(u64, String)> {
     // two power domains do not reach their target state (docs/sleep-j49.md)
     let _ = std::fs::write("/sys/power/state", "mem");
     let slept = unix_now().saturating_sub(before);
-    let reason = wake_reason();
+    let mut reason = wake_reason();
     let mut detail = String::new();
+    // the backplate's call when the time we asked for is over is its timer, not an event
+    if reason == "backplate" && slept + 3 >= secs {
+        reason = "timer".into();
+    }
     let _ = std::fs::write(RTC_ALARM, "0");
     if backplate {
         let _ = std::fs::write("/run/bpd/quiet-end", ""); // bpd talks again, the backplate streams

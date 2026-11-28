@@ -82,7 +82,7 @@ bl 0x08007fd8                        ; end-of-buffers (0x002f)
 
 **There is no "enable sensors" gate in this handler** — it always emits the five buffers and
 an end marker. The buffers stay empty until the head unit has completed the handshake described
-under "Sensor enable" below (the `0x8f` FET-presence echo); after that the sampling task runs and
+under "Sensor enable" below (the `0x8f` echo of the wire state, called "FET presence" in the older parts of this page); after that the sampling task runs and
 `0xa2` returns data. The `*sense 0000 ...` line in the reset burst stays all-zero even on a
 streaming unit, so it says nothing about sampling.
 
@@ -193,6 +193,14 @@ nlclient then opens `/dev/ttyO2` (the proxy PTY) and does the handshake above; i
 "failed to initialize USB observer", which no longer matters.
 
 ## Open questions
+
+(State on 28 November 2026. Since this list was written: the frame `0x000b` is read as the
+state frame with the voltages of the backplate, and `bpd` writes `vin`, `vop` and `vbat` from
+it to `/run/bpd/power`. The offsets and scales come from the cuckoo-nest wiki and were not
+checked against a meter on our backplate. The command `0x89`, the safety temperature, was
+decoded from nlclient; none of the three backplate firmware images handles it. See
+`backplate-heatlink-flow.md`. This page describes the UK/EU backplate, firmware AMBER_BP
+1.0.26; the US firmwares `BP_D2` and `BP_D2D` were only read.)
 
 - Decode handlers 0x84/0x85/0x86, 0xb2/0xb3/0xb5-0xba, 0xc2/0xc3 and the BP frames 0x05, 0x0b,
   0x0c, 0x23, 0x38.

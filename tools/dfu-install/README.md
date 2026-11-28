@@ -6,8 +6,17 @@
 > instead of starting a kernel from RAM. The route that works is the one of the installer page:
 > [docs/install.md](../../docs/install.md), with `nandio/` and `installer/build.sh` here. The
 > rest of this file is kept for the hardware notes in it.
+>
+> **Do not use the commands in this file as instructions.** Every section below is the state of
+> 21 to 23 November 2026. Sections that are overtaken have a note that says so. What is still
+> true: the boot chain (x-loader, our U-Boot in `spl0`/`spl1`, the kernel in `boot0`), the
+> U-Boot build in `uboot/`, the RAM flags, and that the ROM USB boot is the way out of every
+> failed step.
 
-## Status (2026-11-23) -- read this first
+## Status (2026-11-23)
+
+(History. This was the first time the chain worked, with the command-line route. The table of
+fixes is still true for the parts that are still in use: U-Boot and the kernel.)
 
 **The whole chain works on hardware: our U-Boot in NAND boots our Linux 6.6 + Yocto rootfs from NAND by itself.**
 Stage 1 (spl0/spl1), stage 2 (root0, verified byte for byte) and stage 3 (boot0) are done; `reboot` in Linux
@@ -58,6 +67,9 @@ DRAM debug ring survives (`dfu-util -a ring -U`, decode with `tools/kernel-first
 
 ### Open points
 
+(Overtaken. The WiFi firmware is in the image now. The current open points are in the README
+of the project.)
+
 - Rootfs content: `wlcore` firmware missing (`ti-connectivity/wl127x-*`), four jffs2 `wrong data CRC` notices at
   0x566b54..0x56983c (benign so far).
 - The ring gesture (ROM USB) is only needed to rescue-flash spl0/spl1 or to recover a bad U-Boot.
@@ -68,6 +80,9 @@ USB ACM console (`nest #`), DRAM ring/ramoops readback, webcam on the panel (ref
 the installer UI), `uhubctl -e -l 5-1.4 -p 1` (port power; does NOT reset a hung Nest -- use the ring).
 
 ### How to run a push (operational rules learned the hard way)
+
+(Old route: `session1-stock.sh` and `omap_loader` on the command line. The installer page does
+this step now. The USB IDs and the remarks about the ROM window are still true.)
 
 - **Start the loader BEFORE the DFU gesture.** The ROM window after
   power-up is short (3-30 s). Order: start `session1-stock.sh` (it waits),
@@ -82,7 +97,7 @@ the installer UI), `uhubctl -e -l 5-1.4 -p 1` (port power; does NOT reset a hung
 - `0451:d00e` = ROM, `0525:a4a7` = rescue kernel serial gadget (`/dev/ttyACM0`,
   root shell, 115200, `stty -F /dev/ttyACM0 raw -echo`), `2464:0002` = stock,
   `0451:df10` = our U-Boot DFU (target). Check the USB hub/cable first if
-  nothing shows (see the project memory).
+  nothing shows (a cable that only charges, or the wrong hub, looked like a dead device twice).
 - Rescue shell: `/proc` is not mounted (`mount -t proc proc /proc`); send
   short commands one per line; there is no `od`/`nanddump` working in the
   *unmodified* rescue kernel (`dd | hexdump -C` works).
@@ -91,6 +106,9 @@ the installer UI), `uhubctl -e -l 5-1.4 -p 1` (port power; does NOT reset a hung
   never reached userspace.
 
 ### Flash our U-Boot / restore stock (both proven)
+
+(Old route, proven on 21 November 2026. Now the installer page writes U-Boot through `nandio`
+in the service kernel, and "Restore" on the page puts a whole backup back.)
 
     # our U-Boot into spl0+spl1 (default payload, nestinstall runs by itself)
     installer/build-stock-kernel.sh                 # -> payload/nest-install-uImage
@@ -123,6 +141,8 @@ to `saveenv`), so no env restore was needed.
 
 ### Recovery
 
+(Still true for the ROM USB boot. The restore itself is now "Restore" on the installer page.)
+
 The ROM USB boot is the un-brick path and was verified several times,
 including with both spl slots holding our non-booting U-Boot. Hold the ring
 10-15 s after a full power-off; push `nest-restore-uImage` as above.
@@ -130,15 +150,23 @@ including with both spl slots holding our non-booting U-Boot. Hold the ring
 ### Build commands
 
     uboot/build.sh
-    installer/build.sh ~/Projects/nest-yocto/build/tmp/work-shared/nest-j49 \
-      ~/Projects/nest-yocto/build/tmp/deploy/images/nest-j49/j49-image-nest-j49.rootfs.jffs2
+    installer/build.sh <repository>/build/tmp/work-shared/nest-j49 \
+      <repository>/build/tmp/deploy/images/nest-j49/j49-image-nest-j49.rootfs.jffs2
     installer/build-stock-kernel.sh      # Docker, stock 2.6.37, ~5 min
 
-Host deps: `dfu-util` (nix shell), udev rule for `0451:df10` (NixOS
-`extraRules` in `~/nixos/modules/electronics.nix`), Docker,
+`uboot/build.sh` and `installer/build.sh` are still what builds `u-boot-nest-j49.uimg` and
+`uImage-j49-a`. `installer/build-stock-kernel.sh` made the kernels of the old route; the
+service kernel of the installer page comes from `installer/build-service-kernel.sh`
+(see `docs/install.md`, "The files").
+
+Host deps: `dfu-util` (nix shell), a udev rule for `0451:df10` (`99-nest-dfu.rules`), Docker,
 `tools/omap-loader/out/omap_loader`.
 
 ## Design
+
+(The design of the old route. Still true: one ring gesture, no stock fallback, the ROM USB
+boot as the safety net. Not true any more: the "two plain-USB sessions" as described under
+"The three sessions". The installer page has seven steps, in `docs/install.md`.)
 
 One ROM-DFU gesture plus two plain-USB sessions, and the modern Yocto OS
 owns the A slot. Stock fallback is deliberately given up (the ROM USB
@@ -169,7 +197,20 @@ The kernel never reads boot0 and u-boot never reads root0, so the
 stock-vs-mainline BCH4 split never has to be reconciled. The existing B
 slot (root1, mainline bch4) keeps working until it is re-populated.
 
+(The readers and the ECC columns are still true. The writers changed: `spl0`/`spl1` are
+written by `nandio` under the stock service kernel, `root0` by `nandio` under our own kernel
+in `boot0`, and `boot0` by our U-Boot over DFU as before. The first page of `env1` can hold
+the slot record of `j49-update`, written by our kernel. A thermostat with stock data also
+needs its `scratch` partition erased under the stock kernel, because our kernel cannot read
+what the stock firmware wrote; the installer page does that.)
+
 ## The three sessions
+
+(Overtaken. Session 1 is now the installer page with `nandio` in the service kernel. Session 2
+(`stage2.sh`) did not work reliably and is replaced: the kernel in `boot0` starts `nandio`,
+which takes the root file system over the USB serial line. Session 3 is still how the kernel
+gets into `boot0`, but the page does it before the root file system, not after. The
+`flashstub` was never proven: it hung.)
 
 **Session 1 has two implementations.** The default is the proven stock-kernel
 rescue (`session1-stock.sh`); the custom bare-metal `flashstub/` is kept as
@@ -274,6 +315,9 @@ are embedded.
 
 ## Layout
 
+(Partly overtaken: see the notes in the list. Not in this list because they came later:
+`nandio/`, the service program of the installer page, and `installer/build-service-kernel.sh`.)
+
 - `flashstub/` -- the bare-metal session-1 second stage (C, no libc,
   integer-only, linked 0x80100000). `nand.c` is the stock-BCH4 writer;
   `panel.c` is the round-LCD bring-up + the steel installer screen; see
@@ -283,10 +327,10 @@ are embedded.
   `index.css`).
 - `mkpayload.py` -- builds the NFD1 payload (header + image + block
   ranges) the stub receives at 0x82000000.
-- `nest-dfu/` -- vendored runtime images from `~/Projects/nest-dfu-attack`
-  (`x-load.bin`, stock `u-boot.bin`, `rescueUImage`, `uImage`) with
-  provenance + sha256s; the runtime chain no longer needs the external
-  tree (rebuilding the stock kernel still does).
+- `nest-dfu/` -- the two loaders of the USB boot chain (`x-load.bin`, stock
+  `u-boot.bin`) with provenance + sha256s. The two kernels of NestDFUAttack
+  (`rescueUImage`, `uImage`) were here for the old route; they are not in the
+  repository any more.
 - `uboot/` -- the U-Boot 2024.07 nest-j49 board (defconfig, DTS, whole
   default env, build -> `out/u-boot-nest-j49.uimg`). See its README
   section below.
@@ -306,6 +350,8 @@ are embedded.
   DFU gadget) and 0451:d00e (ROM peripheral boot).
 
 ## Payload format (NFD1)
+
+(Only for the `flashstub`, which was never proven. Not used by the installer page.)
 
     u32 magic "NFD1", u32 image_len, u32 n_ranges(1..4), u32 0,
     { u32 first_block, u32 n_blocks } * n_ranges,   <- written in order

@@ -3,7 +3,11 @@
 Boot a mainline Linux kernel on the real hardware **hands-free and reversibly**,
 by `kexec`-ing it from the running stock 2.6.37. No flashing, no UART: a bad
 kernel is undone by a power-cycle (NAND still boots stock). Builds on
-[[nest-v2-device-profile]] and tools/kexec (the kexec staging channel).
+tools/kexec (the kexec staging channel).
+
+This page is the record of the bring-up of October and November 2026, on a thermostat that
+still ran the stock firmware. It is history, not instructions: the kernel is now built by the
+Yocto layer and installed with the installer page (`docs/install.md`).
 
 ## The visibility problem — and the fix
 

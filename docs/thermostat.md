@@ -2,8 +2,11 @@
 
 Two programs share the work. `j49-screen` is the user interface (ring, screen). `bpd` owns the
 backplate and does the control. They talk through small text files, and those files are also the
-interface for anything else (SSH now, Home Assistant later): change a file and the device follows
-within a second or two.
+interface for anything else (SSH, the web page, MQTT for Home Assistant): change a file and the
+device follows within a second or two.
+
+Supported hardware: the UK/EU backplate with a Heat Link, heating only, one switch circuit
+(the README has the list of what is not supported).
 
 ## /var/lib/j49/thermostat (settings, persistent)
 
@@ -65,7 +68,9 @@ clock is set (year 2025 or later).
     t=1795706282       # unix time
 
 Other state files of `bpd`: `/run/bpd/sht20` (raw temperature, humidity), `/run/bpd/pir`,
-`/run/bpd/als`.
+`/run/bpd/als`, and `/run/bpd/power` (`vin=`, `vop=`, `vbat=` in volts, `raw=`, `t=`: the
+voltages from the backplate's state frame `0x000b`; the offsets and scales come from the
+cuckoo-nest wiki and were not checked against a meter on our backplate).
 
 ## Control loop (bpd, once a second)
 
@@ -104,8 +109,8 @@ A dial like the thermostat card of Home Assistant, on the round panel.
 - **Menu** (a click on the dial): mode heat/off, schedule on/off, away on/off, status, settings,
   back. The ring moves the cursor, a click changes the value or opens the page.
 - **Status:** WiFi address, backplate, room, motion, light, battery, uptime.
-- **Settings:** brightness, volume, WiFi on/off, language (English or Dutch), restart (asks
-  first), back.
+- **Settings:** brightness, volume, WiFi on/off, WiFi hotspot on/off (see `j49-wifi` below),
+  language (English or Dutch), theme, restart (asks first), back.
 - **Web login:** when a browser asks to log in, the code and the choices REFUSE / ALLOW take over
   the screen (see the web page below).
 - **Installer:** `--screen install` shows the phase and progress from `/run/install.state`.
@@ -167,7 +172,7 @@ changes the choice, and the screen follows. The page shows temperatures in Celsi
 them again when the language changes. Topics, payloads and tune names are the same in every
 language.
 
-English, Dutch and the three themes are also built into the program, so it works without those
+English, Dutch and the four themes are also built into the program, so it works without those
 files (the installer uses it that way).
 
 Control FIFO `/run/j49-screen.fifo`: `wake`, `sleep`, `page N` (0 dial, 1 menu, 2 status,
@@ -251,10 +256,10 @@ password=<mqtt password>
 
 **More than one device on a broker.** Without `prefix=` the topics start with
 `j49_<last six digits of the WiFi MAC address>`, and without `name=` the device is called
-"J49 thermostaat <last four digits>", so two devices never share topics or a name. (A device
+"J49 thermostat <last four digits>", so two devices never share topics or a name. (A device
 whose file says `prefix=j49` keeps that; the tables below write `j49/` for the prefix.) The device
 entry in Home Assistant carries the MAC address, and there are two diagnostic sensors,
-"MAC-adres" and "IP-adres" (`id/mac`, `id/ip`). The name can be set on the web page.
+"MAC address" and "IP address" (`id/mac`, `id/ip`). The name can be set on the web page.
 
 `keepalive` is the MQTT keep-alive in seconds (at least 10, default 600): `j49-mqtt` pings at half
 of it and the broker declares the device offline after 1.5 times, so 15 minutes with the default.
@@ -272,7 +277,9 @@ for a refusal, and `/run/j49-mqtt.status` (`state=connected|refused|offline|unco
 `detail=`, `t=`) says the same for the web page. Without the file, or with the network down, it
 tries again every 30 s.
 
-**Home Assistant** finds the device by MQTT discovery ("J49 thermostaat"): a climate entity
+The names of the entities below are the English ones; they follow the language of the device.
+
+**Home Assistant** finds the device by MQTT discovery ("J49 thermostat"): a climate entity
 (modes off/heat, target temperature in steps of 0.5, room temperature, humidity, action),
 sensors for temperature, humidity, light and battery voltage, binary sensors for motion and the
 boiler relay, a switch for the schedule, the next schedule change, and a number for the frost
@@ -298,16 +305,16 @@ threshold.
 | `away_temp`, `away_temp/set` | out, in | degrees C, rounded to 0.5, 9..32 |
 | `screen`, `screen/set` | out, in | `ON` = panel lit, `OFF` = panel asleep; a switch in Home Assistant |
 | `volume`, `volume/set` | out, in | 0..10, the piezo (beeps and tunes); a number "Volume" |
-| `brightness`, `brightness/set` | out, in | 10..120, the panel; a number "Helderheid scherm" |
-| `say`, `say/set` | out, in | only when the screen program lists `say` in its capabilities: a text for it to speak; a text entity "Zeg" |
+| `brightness`, `brightness/set` | out, in | 10..120, the panel; a number "Screen brightness" |
+| `say`, `say/set` | out, in | only when the screen program lists `say` in its capabilities: a text for it to speak; a text entity "Say" |
 | `tune`, `tune/set` | out, in | a tune by name, played on the piezo; a select "Tune". Our own: `ding`, `done`, `happy`, `alarm`, `sleep`. Public-domain melodies written out by us: `ode`, `elise`, `nachtmusik`, `toccata`, `mountainking`, `frerejacques`, `twinkle`, `birthday`, `jinglebells`, `cancan`, `tell`, `fifth`, `turkishmarch`, `spring`, `canon`, `weddingmarch`, `silentnight`, `tannenbaum`, `ducklings`, `auldlangsyne`, `yankee`, `entertainer`, `taps`, `greensleeves`, `susanna`, `marylamb`, `londonbridge`, `saints`, `charge` |
-| `tune/custom`, `tune/custom/set` | out, in | a melody in RTTTL, e.g. `x:d=8,o=5,b=200:c,e,g`; a text entity "Deuntje (RTTTL)". `tune/set` takes RTTTL as well |
+| `tune/custom`, `tune/custom/set` | out, in | a melody in RTTTL, e.g. `x:d=8,o=5,b=200:c,e,g`; a text entity "Tune (RTTTL)". `tune/set` takes RTTTL as well |
 | `sleep`, `sleep/set` | out, in | `ON` / `OFF`: sleeping allowed (`j49-sleep`) |
 | `sleep/state` | out | `slaapt` / `wakker`; "slaapt" is sent just before the device suspends |
 | `sleep/last_wake`, `sleep/last_slept` | out | what woke it last (`backplate`, `wifi of ring`, `timer`) and how long it slept, in s |
 
 `screen` is the display only (backlight off after 25 s without input), not a sleep state of the
-device: the head unit does not suspend yet (see `sleep-stock.md`). `j49-screen` reports it in
+device. The sleep of the head unit is in the `sleep` topics (see `sleep-j49.md`). `j49-screen` reports the display in
 `/run/j49-screen.state` (`asleep=0|1`); the command goes to its FIFO as `wake` or `sleep`, and a
 woken panel goes back to sleep by itself.
 
@@ -318,7 +325,9 @@ dashboard are in `home-assistant.md`. A change written through MQTT rewrites the
 line per time and temperature and all the days it holds for; comments in the file are lost.
 
 Checked on a PC against a mosquitto broker (state, discovery JSON, every command, last will) and
-on the device up to the broker's answer. Not checked yet: the entities inside Home Assistant.
+on the device up to the broker's answer. That was the state on 26 November 2026. Since then a
+thermostat runs with Home Assistant: a target temperature set there reached the thermostat
+(`sleep-j49.md`). Not every entity was checked one by one inside Home Assistant.
 
 ## WiFi setup hotspot (j49-wifi)
 
@@ -361,8 +370,9 @@ unit tests and ran against a stand-in for `wpa_supplicant` on a PC.
 `j49-web` (`tools/j49-web`, service `j49-web.service`) serves one page on port 80:
 `http://<device>/`. On it: heating on/off, temperature, away and its temperature, the frost
 threshold, the schedule (rows of days, time and temperature; times are 24-hour lists, not the
-browser's time field, which follows the browser language), the MQTT broker settings and a block
-"Apparaat" (below). Like
+browser's time field, which follows the browser language), the MQTT broker settings, a switch
+"Sleep" (it asks before it switches sleeping off, because the battery then runs empty on a
+backplate), "Updates over the network" (`update.md`) and a block "Device" (below). Like
 `j49-mqtt` it only reads and writes the files above; a saved schedule is checked with the same
 rules as `bpd` and refused with the line number when a line is wrong.
 
@@ -370,26 +380,26 @@ rules as `bpd` and refused with the line number when a line is wrong.
 
 1. The browser asks to log in and shows a 4-digit code.
 2. `j49-web` writes `/run/j49-web/pending` (`code=`, `ip=`, `t=`). `j49-screen` wakes, beeps and
-   shows the code, the address of the browser and the choices WEIGEREN and TOESTAAN.
-3. Somebody at the device compares the code, turns the ring to TOESTAAN and clicks. The choice
-   starts on WEIGEREN, so a click without turning refuses. `j49-screen` writes
+   shows the code, the address of the browser and the choices REFUSE and ALLOW.
+3. Somebody at the device compares the code, turns the ring to ALLOW and clicks. The choice
+   starts on REFUSE, so a click without turning refuses. `j49-screen` writes
    `/run/j49-web/answer` (`code=`, `ok=`).
 4. Allowed: the cookie that browser got in step 1 is a session for 24 hours. No answer within
    60 s counts as refused.
 
 One question at a time, and not more often than once in 5 s. The browser whose question is open
-can send it again ("Vraag opnieuw sturen"): a new code replaces the old one on the screen. While a
+can send it again ("Send the question again"): a new code replaces the old one on the screen. While a
 question is open it owns the screen of the device; no page change can hide it. Sessions are kept
 in `/run/j49-web/sessions`: they survive a restart of the service, not a reboot.
 
-**Apparaat** on the page:
+**Device** on the page:
 
 - Brightness, volume, the look of large digits and the language go to
   `/var/lib/j49-screen/settings`; `j49-screen` sees the file change within a second and applies it.
 - The temperature correction is `offset=` of the thermostat file, in steps of 0.1.
-- Kind of heating: `min_off=` / `min_on=`. "Ketel" = 180 s / 60 s (a burner must not cycle
-  quickly). "Klep" = 10 s / 0 s (the default), for a district-heating valve, where only chatter has to be
-  avoided. While heat is wanted but `min_off` is not over, the home screen shows `WACHT m:ss`.
+- Kind of heating: `min_off=` / `min_on=`. "Boiler" = 180 s / 60 s (a burner must not cycle
+  quickly). "Valve" = 10 s / 0 s (the default), for a district-heating valve, where only chatter has to be
+  avoided. While heat is wanted but `min_off` is not over, the home screen shows `WAIT m:ss`.
 - WiFi: the saved networks by name, the one in use, add and remove. A new network is appended to
   `/etc/wpa_supplicant/wpa_supplicant-wlan0.conf` with a higher priority; the networks that were
   there stay, so with a wrong password the device falls back to one that worked. The last network

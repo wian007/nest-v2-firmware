@@ -1,5 +1,21 @@
 # bpd — Nest J49 backplate link tool (Rust)
 
+> **State on 28 November 2026.** This file is the record of the first days of `bpd` (24
+> November 2026). `bpd` is now the backplate daemon and the thermostat control loop of the
+> image. What it does, its files and its settings are in
+> [docs/thermostat.md](../../docs/thermostat.md); the protocol is in
+> [docs/backplate-protocol.md](../../docs/backplate-protocol.md) and
+> [docs/backplate-heatlink-flow.md](../../docs/backplate-heatlink-flow.md). Overtaken below:
+>
+> - "What stock does to switch them on is still open": solved. The head unit must echo the
+>   13 bytes of the wire state in `0x8f` (seen on a device).
+> - "Only `0xa1` is a known-safe head-unit frame": `bpd` now also sends the switch command
+>   `0x82` for circuit 0, the quiet mode `0xa1`/`0xa4` and the buffer requests (seen on a
+>   device with a Heat Link).
+> - The frame `0x0b` is no longer only printed raw: `bpd` writes its voltages to
+>   `/run/bpd/power`.
+> - Supported: the UK/EU backplate with a Heat Link (firmware AMBER_BP 1.0.26), heating only.
+
 Rust port of `tools/kernel-firstlight/bptool.c`, meant to become the
 device-side daemon that keeps the backplate's head-unit watchdog fed on a
 modern kernel.

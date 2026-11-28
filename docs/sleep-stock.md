@@ -119,6 +119,10 @@ of the time and only wakes on a backplate event, a WiFi packet or a timer. Our h
 suspends, and even its idle state keeps CORE, PER and DSS powered (see the measurements in the
 2026-11-25 session: CPU ~50 C at load 0.04, SHT20 reads ~3 C above a reference).
 
+(That paragraph and the steps below were written on 25 November 2026. Since 27 November our
+head unit does suspend, with the quiet mode of the backplate and wake-on-WLAN. It is not
+reliable yet. The current state is in `sleep-j49.md`.)
+
 Steps, smallest first:
 
 1. `enable_off_mode=1` + let unused peripherals idle (what the stock init script does).

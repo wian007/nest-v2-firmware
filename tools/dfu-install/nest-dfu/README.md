@@ -25,7 +25,9 @@ below, which are about the first, command-line route.
 | `rescueUImage` | 6,966,340 | `add18697d358c8d15f6b8ad0dcd6a6cb926ecb6e6a9ce490573b91c0e148355f` | The PROVEN stock 2.6.37 rescue kernel: vendor display (logo), fbcon on the panel, g_serial console on ttyGS0, and an initramfs with a root shell + `usr/sbin/flash_eraseall`/`nandwrite`. This is the control image for session-1 diagnostics. |
 | `uImage` | 6,964,684 | `58f4c20189cb801773a11e7cd81f5db67c54ac36ee180cc413972950164731a0` | The same stock kernel image as shipped (`uImage` vs `rescueUImage` differ by packaging/metadata). Keep for reference. |
 
-Usage in this repo:
+Usage in this repo. This is the first, command-line route and it is history: the installer
+page (`docs/install.md`) sends the two loaders and `../payload/nest-service-uImage` itself. The
+first command needs `rescueUImage`, which is not in this repository.
 
 ```sh
 # proven chain, control test (logo + ttyGS0 shell):
@@ -46,6 +48,8 @@ vendored: `installer/build-stock-kernel.sh` reads it from the external repo
 (`DFU_ATTACK=...`) and builds inside that repo's Docker environment.
 
 ## Notes (2026-11-21)
+
+(History of the command-line route. The remark about the short ROM window is still true.)
 
 The chain was re-proven on hardware: pushing `x-load.bin` + `u-boot.bin` +
 `rescueUImage` gives the logo and a root shell on `/dev/ttyACM0` (`0525:a4a7`).

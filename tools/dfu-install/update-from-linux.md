@@ -3,6 +3,20 @@
 Works from the running system since `j49-dfu` opens `/dev/mem` with `O_SYNC` (a66b0059).
 Done on 2026-11-25/26 for the kernel and for a complete root filesystem.
 
+**State on 28 November 2026.**
+
+- The kernel: this page is still the only way. `boot0` is read by U-Boot, and U-Boot and our
+  kernel use different ECC layouts, so `boot0` must be written by U-Boot over USB.
+- The root file system: `j49-update` now does over the network what the section "Root
+  filesystem" below does by hand ([docs/update.md](../../docs/update.md)). It was tested on a
+  PC only, not yet on a thermostat. The steps by hand below were done on a thermostat.
+- Which slot starts: since 27 November the kernel `uImage-j49-a` starts `nandio` first.
+  `nandio` reads a slot record in `env1` when there is one. Without a record the last `root=`
+  of the kernel command line decides, as described below.
+- To start a test kernel with `kexec` from the running system is not a supported way. It did
+  work, but it was unreliable on a thermostat: WiFi could not authenticate for minutes, and
+  one kernel hung at its first suspend.
+
 ## Open the U-Boot DFU window from Linux
 
 On the device (stop feeding the hardware watchdog; it cannot be stopped, so it resets the board

@@ -1088,7 +1088,9 @@ fn handle(mut s: TcpStream) {
                 msg(&mut s, "400 Bad Request", tw("err.bad_value"));
             } else {
                 eprintln!("update to {v} from {from} asked from the page");
-                let _ = std::process::Command::new("systemd-run").args(["--quiet", "--collect", "/usr/bin/j49-update", "install", &v, &format!("--from={from}")]).status();
+                // on its own, outside this service: the install ends in a restart (the image has no
+                // systemd-run; a process in a session of its own does the same here)
+                let _ = std::process::Command::new("setsid").args(["/usr/bin/j49-update", "install", &v, &format!("--from={from}")]).stdin(std::process::Stdio::null()).stdout(std::process::Stdio::null()).stderr(std::process::Stdio::null()).spawn();
                 msg(&mut s, "200 OK", "ok");
             }
         }

@@ -6,12 +6,22 @@
 >   bus ready"). Every later resume then fails for the regulators and the WiFi card; the
 >   thermostat is unreachable until it restarts. `j49-sleep` restarts the board when it sees
 >   this (written, not yet seen at work). What makes the bus stick the first time is not known.
-> - Every resume restarted the WiFi chip (a wait in the driver that cannot end; patch 0009,
->   being tested).
+> - Nearly every resume restarts the WiFi chip: "ELP wakeup timeout", then "HW watchdog
+>   interrupt received", a firmware reboot and a new association. A patch that skipped the wait
+>   in the driver (0009, 28 November) did **not** help: 14 of 16 resumes still failed with it.
+>   It was taken out again; the cause is open.
 > - The core power domain does not reach its low state in suspend, so a sleep saves less than
 >   it should. Stock reaches "off".
 > - The chip cannot keep the MQTT connection alive by itself as stock does for its own
 >   connection, so the head unit wakes for it.
+> - Measured on 28 November on a unit on a charger (no backplate), one suspend by hand each:
+>   with wake-on-WLAN armed, 3 of 3 resumes gave "ELP wakeup timeout" and "HW watchdog interrupt
+>   received" and a firmware reboot; with wake-on-WLAN disabled the driver stops the chip for the
+>   sleep and boots it at the resume without an error, but the new association then ran into
+>   "authentication timed out" for many rounds (seconds to minutes). The same timeouts are in the
+>   log after every start of the firmware (boot, and for 8 minutes after a kexec).
+> - Stock uses another firmware for the chip (`wl127x-fw-4-*.bin`, "FRev 4.0.0.0.4"), with the
+>   TCP keep-alive in the chip; mainline has `wl127x-fw-5-sr.bin` (6.3.10.0.142).
 > The rest of this document is the record of how it was built and what was measured.
 
 How stock does it is in `sleep-stock.md`. This file records what was tried on our system.
@@ -19,8 +29,12 @@ How stock does it is in `sleep-stock.md`. This file records what was tried on ou
 
 ## State
 
-The head unit does not suspend in normal use. Only the panel sleeps (backlight off after 25 s);
-`j49-screen` reports that as `asleep=` and `j49-mqtt` as the topic `screen`.
+Until 26 November 2026 the head unit did not suspend in normal use. Since 27 November 2026 it
+does: `j49-sleep` (below) is on unless it is switched off, and since 28 November it also sleeps
+while the heat is on. The note at the top says how well that works.
+
+The panel sleeps apart from that (backlight off after 25 s); `j49-screen` reports it as
+`asleep=` and `j49-mqtt` as the topic `screen`.
 
 ## Suspend to RAM, tests of 2026-11-26 on the test backplate
 
@@ -45,7 +59,8 @@ Observed:
 - The ring (rotation and click) wakes it, and the RTC alarm did so in earlier tests.
 - Every suspend ends with "Powerdomain (per_pwrdm) didn't enter target state 1", the same for
   `core_pwrdm`, and `echo mem` returns an error although the board did sleep. PER and CORE stay
-  on, so the saving of this suspend is small. Not measured yet.
+  on, so the saving of this suspend is small. Not measured yet. (State on 28 November: the core
+  power domain is the one that still does not reach its low state; see the top.)
 - `twl4030_usb_suspend` prints `regulator_disable` warnings with a stack trace at every suspend.
 - After the wake `bpd`, `j49-screen` and `j49-web` ran on as before.
 
@@ -127,15 +142,17 @@ the saving, since PER and CORE still do not reach retention.
 ## The sleep manager (j49-sleep)
 
 `tools/j49-sleep`, service `j49-sleep.service`. **On unless switched off** (since 27 November 2026; before that it was off unless enabled): `j49-sleep on|off|status`,
-the switch "Slapen" on the web page, or the MQTT switch "Slapen toegestaan"
-(`/var/lib/j49/sleep`: `enabled=`, `idle=` 20 s, `max=` 1500 s, `motion=` near).
+the switch "Sleep" on the web page (it warns before it switches sleeping off), or the MQTT
+switch "Sleep allowed"
+(`/var/lib/j49/sleep`: `enabled=`, `idle=` 20 s, `max=` 1500 s, `max_heat=` 300 s, `motion=` near).
 `motion=near` (the default since 27 November 2026) wakes the head unit only for the near
 movement sensor, `on` also for the far one (the whole room), `off` for neither. With `on`, a
 thermostat in a living room was woken every few seconds to a minute for as long as somebody was
 in the room. What the stock firmware asks the backplate for when it sleeps was not captured.
 
 It suspends only when all of this holds: enabled; up for 2 minutes; awake for `idle` seconds; the
-panel is asleep; `bpd` reports no switch pending and no waiting time; no SSH session
+panel is asleep; `bpd` reports no switch pending and no waiting time (heat that is on does not
+keep it awake, since 28 November 2026); no SSH session
 (more than one `dropbear`); no web login question open and no request to the web page in the last
 minute. Otherwise `/run/j49-sleep.state` names the reason (`why=`).
 
@@ -145,7 +162,7 @@ patterns could be set, the chip lost the network in every sleep, the next sleep 
 was back, and the device could not be reached while asleep (seen 2026-11-26, the first night on
 the real backplate).
 
-How long: `max`, but at most 300 s while the mode is "heat" (the control loop has to look again),
+How long: `max`, but at most `max_heat` (default 300 s) while the mode is "heat" (the control loop has to look again),
 and at most 0.8 of the MQTT keep-alive (the broker gives up at 1.5 times; `j49-mqtt` pings at
 once after a wake). The default keep-alive is 600 s (480 s of sleep at most) since 27 November
 2026; with the 60 s it was before, a thermostat with a broker set woke every 48 s.
@@ -155,14 +172,16 @@ when the backplate is there, a quiet request to `bpd` with wake mask timer + tem
 near-PIR unless `motion=off`, and PIR when `motion=on`), and it waits for `/run/bpd/quiet`; RTC alarm as the safety net;
 "asleep" in the state file and 2.6 s for `j49-mqtt` to send it; `mem`. After the wake it writes
 `/run/bpd/quiet-end` (bpd talks again) and records the wake interrupt: `backplate`, `wifi` (the
-GPIO bank of the WL1271; the ring sensor is on it too) or `timer`.
+GPIO bank of the WL1271; the ring sensor is on it too) or `timer`. A wake when the asked time
+is over counts as `timer`. When the RTC cannot be read after a resume (the I2C bus of the power
+chip is stuck, see the top), `j49-sleep` restarts the board; that was not yet seen at work.
 
 `bpd` ends its quiet mode on that file, on a run of `0x00` bytes from the backplate (its wake-up
 call), on a frame, or after the time.
 
 The panel does not come on at a wake by itself. It lights for the ring (turn or click), for motion
 reported by the backplate, for a web login question, for `say`, and for `wake` on the FIFO (the
-MQTT switch "Scherm"). A wake by a network packet, the timer or a temperature event leaves it dark.
+MQTT switch "Screen"). A wake by a network packet, the timer or a temperature event leaves it dark.
 
 Tested 2026-11-26 on USB, without a backplate: enabled, it suspended by itself 25 s later, slept
 50 s, was woken by a temperature set in Home Assistant and applied it 2 s later.
@@ -171,22 +190,33 @@ Tested the same evening on the test backplate (`max=60`, `motion=off`, wake mask
 daemon put the backplate in quiet mode, slept 59 s and was woken by the backplate's timer; `bpd`
 went on without a new handshake. Other sleeps of that run ended early through the ring (it was
 in use) and once after 1 s, which is why the daemon now waits 1.5 s between the quiet request
-and the suspend. **Not tested:** wake by motion and by temperature, heating that starts while
+and the suspend. **Not tested** at that time: wake by motion and by temperature, heating that starts while
 asleep, hours of running, and what it saves.
 
+Since 27 November 2026 it runs on a real backplate with a Heat Link. Seen there: the WiFi chip
+was restarted by the driver on 24 of 32 resumes ("ELP wakeup timeout", "HW watchdog interrupt
+received"). The problems that are open are in the note at the top.
+
 ## What is needed before the head unit may sleep by itself
+
+This list was written on 26 November 2026, before the sleep manager was switched on by
+default. It is kept as the record; each point says where it stands now.
 
 1. Done (see above): the backplate goes quiet with `0xa4` + `0xa1` as the last frame, and wakes
    the head unit from suspend. Open: the wake mask bits other than the timer, and the kernel bug.
 2. Heating while asleep. Decoded on 28 November 2026 (see `backplate-heatlink-flow.md`): the
    backplate of the Heat Link has no safety temperature, but it holds the switch while the head
    unit is silent and its watchdog switches the heat off after the quiet time plus 30 minutes.
-   So `j49-sleep` sleeps with the heat on too (at most 300 s at a time while the mode is
-   "heat"), and stays awake only while a switch is pending. Written, not yet run on a device.
+   So `j49-sleep` sleeps with the heat on too (at most `max_heat`, default 300 s, at a time
+   while the mode is "heat"), and stays awake only while a switch is pending. Seen on a device
+   on 28 November 2026: sleeps of up to 480 s with the heat on, and a battery voltage that
+   stayed about level over an hour. That is one hour on one unit, not a proof that the battery
+   holds.
    Every early wake by the backplate is logged with what was seen right after it
    ("movement" or not, the temperature before and after), to find out how well the wake on
    temperature works; then the 300 s can go up.
-3. PER and CORE must reach retention, or suspend saves little.
-4. Done: `j49-sleep` (above). Open: testing it on the backplate.
+3. The core power domain must reach its low state, or suspend saves little. Open.
+4. Done: `j49-sleep` (above). It runs on a backplate since 27 November 2026, but not reliably
+   (see the top).
 5. The backplate resets the head unit after about 29 minutes without `0xa1`: the maximum sleep
    time has to stay below that, or be set with `0xa1` itself.
