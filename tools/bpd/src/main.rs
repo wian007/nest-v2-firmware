@@ -753,9 +753,14 @@ fn run_sensors(path: &str, _interval: Duration, _max_sleep: u16) -> io::Result<(
             let mut it = req.split_whitespace();
             let secs: u16 = it.next().and_then(|v| v.parse().ok()).unwrap_or(30).clamp(5, 600);
             let mask = it.next().and_then(|v| u16::from_str_radix(v.trim_start_matches("0x"), 16).ok()).unwrap_or(1);
-            if demand {
-                println!("{} quiet refused: heat demand is on", stamp(start));
-            } else {
+            // With the heat on too: the backplate holds the switch while we are silent, as it does
+            // for stock. Its watchdog is the safety net: after the quiet time plus 30 minutes
+            // without a word from us it switches the heat off and restarts the head unit
+            // (docs/backplate-heatlink-flow.md).
+            {
+                if demand {
+                    println!("{} quiet with the heat on: the backplate holds the switch", stamp(start));
+                }
                 let limit = Duration::from_secs(secs as u64 + 20);
                 println!("{} quiet: wake mask {mask:#06x}, {secs} s; silent until the backplate speaks or {} s pass", stamp(start), limit.as_secs());
                 tty.write_all(&encode(0xa4, &mask.to_le_bytes()))?;

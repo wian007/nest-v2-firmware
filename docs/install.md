@@ -95,8 +95,8 @@ works. That was tried several times, also with a boot loader that did not start.
   the address. Connect a phone or laptop to that network (it has no password), open
   `http://192.168.4.1/`, choose "Log in" and confirm the code on the thermostat with the ring.
   Add your network in the WiFi block of the page. The hotspot then closes and the thermostat
-  joins your network. The hotspot also opens when the thermostat could not join any of its
-  networks for five minutes.
+  joins your network. With networks set, the hotspot only opens when you switch it on under Settings on
+  the thermostat.
 
   The other way is the USB serial console (115200 baud; `screen /dev/ttyACM0 115200` on Linux,
   PuTTY on Windows). Log in as `root` and write the network into

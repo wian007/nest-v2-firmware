@@ -29,6 +29,18 @@ Heating is off until it is switched on (`mode=off`). Sleeping is on unless it is
 
 ## Status
 
+> **Work in progress, and not fit for daily use on a backplate yet (28 November 2026).**
+> - **Sleeping does not work well.** After some wake-ups the power chip stops answering; the
+>   thermostat then loses WiFi and stays unreachable until it restarts. A check that restarts
+>   it in that case is written; the cause in the kernel is not found.
+> - **On a backplate the battery runs empty.** The backplate supplies less than the head unit
+>   uses while it is awake, and the sleep is not deep enough and too often broken to make up
+>   for it: within about a night the thermostat goes off. The stock firmware does not have
+>   this problem.
+> - Until this is solved: for experiments, or on a USB supply.
+>
+> What is known and what is being tried: [docs/sleep-j49.md](docs/sleep-j49.md).
+
 Works on the device: everything in the table above, the installer, and updates over USB (DFU)
 without opening anything. It hangs on a real backplate and controls real heating since
 27 November 2026.

@@ -20,6 +20,7 @@ SRC_URI = "https://cdn.kernel.org/pub/linux/kernel/v6.x/linux-${PV}.tar.xz;name=
            file://0006-backlight-lm3530-bl-dt-driver-nest-j49.patch \
            file://0007-arm-omap2-pdata-quirks-nest-j49-mmc2-loopback-clock.patch \
            file://0008-input-adbs-a330-nest-j49.patch \
+           file://0009-wlcore-no-elp-wait-with-pending-irq-from-suspend.patch \
            file://j49.cfg \
            file://omap3-nest-j49.dts \
            "

@@ -43,6 +43,10 @@ if [ "${2:-}" = "--images" ]; then
         done
         printf '\n}\n'
     } > "$OUT/images/manifest.json"
+    # The page shows the text of the release these images belong to: J49_RELEASE=<tag> names it.
+    if [ -n "${J49_RELEASE:-}" ]; then
+        printf '{"repo": "%s", "tag": "%s"}\n' "${J49_REPO:-wian007/nest-v2-firmware}" "$J49_RELEASE" > "$OUT/images/release.json"
+    fi
     # Who made what, under which licence, and where the source is: it goes with the files.
     {
         cat "$HERE/images-notice.md"

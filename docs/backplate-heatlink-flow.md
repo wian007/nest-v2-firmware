@@ -144,6 +144,66 @@ also make it fail-safe (no pulses, no heat). The meaning of the two currents and
 So for the Heat Link the command is: **`0x82 00 01` = heat on, `0x82 00 00` = heat off**, valid
 after the wire ACK, answered by `0x0006 00 <state>`.
 
+## What happens to the heat when the head unit sleeps, hangs or dies (2026-11-28)
+
+Read from stock `nlclient` and from the backplate firmware AMBER_BP 1.0.26 (disassembly). Nothing
+of this section was tried on a device.
+
+### The "safety temperature" message, 0x89 (observed in nlclient)
+
+`SetSafetyTempSettings` (0x1c9ae0) fills 16 bytes and the sender at 0x1c731c puts them on the
+wire as command **0x89**:
+
+| offset | type | field |
+|---|---|---|
+| 0 | u16 | enable: bit 0 heat, bit 1 cool |
+| 2 | s16 | heat: lower safety temperature - 0.39 C, in 0.01 C |
+| 4 | s16 | heat: lower safety temperature + 0.39 C, in 0.01 C |
+| 6 | u16 | heat circuits, one bit per circuit |
+| 8 | s16 | cool: upper safety temperature - 0.56 C, in 0.01 C |
+| 10 | s16 | cool: upper safety temperature + 0.56 C, in 0.01 C |
+| 12 | u16 | cool circuits |
+| 14 | u16 | lockout |
+
+It is the "Safety Temperature" of the Nest menu: the backplate itself switches the heat ON below
+a temperature (frost protection) and the cooling on above one, when the head unit cannot.
+nlclient sends it only when two capability flags of the backplate are set. The answer is
+`MSG_ST_STATUS` ("status, current, heattime, cooltime, reason, ocevents, pwrevents").
+
+**The backplate of the Heat Link does not have it (observed).** In AMBER_BP 1.0.26 the dispatch
+table (0x08001c4a) sends 0x89, like 0x87..0x8e, to the branch for unknown commands, and the image
+holds no text about a safety temperature. So on this hardware there is no frost protection in
+the backplate, and no upper limit either: frost protection is only what `bpd` does while the
+head unit runs.
+
+### What this backplate does have: a watchdog on the head unit (observed)
+
+- Every `0xa1` (the quiet message, also `bpd`'s keep-alive) loads a countdown with
+  **payload + 1800 seconds** (0x08001cfe; a payload of 0 counts as 7200).
+- A tick once a second counts it down (0x080017ce). At zero it sets a reason bit and calls
+  0x08001f08, which **first switches the heat off** (`switch(0, 0)` at 0x080058a0) and then resets
+  the head unit ("reset the HU now").
+- The same routine runs every 2160 s, and every 300 s in a demo mode, under conditions that were
+  not read further.
+- As long as the head unit has not acknowledged the wires (flag 0x20000440 is 0, as after its
+  reset), a routine every 60 s (0x08001214) switches the heat off when a condition holds that was
+  not read further.
+- Quiet mode itself does not touch the switch: the pulse train to the Heat Link goes on while
+  the head unit sleeps.
+
+Inferred from that:
+
+- The head unit can sleep while the heat is on, as stock does: the backplate holds the switch.
+- A head unit that hangs with the heat on leaves it on for at most the last quiet time plus
+  30 minutes: with `bpd`'s keep-alive (600 s) 40 minutes, after a quiet request of 300 s
+  35 minutes. Then the backplate switches the heat off and restarts the head unit. The 30 minutes
+  are a constant in the firmware.
+- Unknown: the countdown only runs while a word of the same structure (+0x10) is 0; what that
+  word is was not read, so it is not proven that the countdown runs in every kind of hang. On
+  2026-11-17 a head unit that hung was restarted by the backplate about every 29 minutes, which
+  fits.
+- Unknown: what the Heat Link does by itself when the pulses stop or when it loses its supply.
+
 ## Tried on the test backplate with the Heat Link (2026-11-26)
 
 Observed with our own `bpd` (no stock software running):

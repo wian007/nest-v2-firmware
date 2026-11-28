@@ -16,3 +16,11 @@ esac
 echo "slot=$s"
 echo "root=$r"
 echo "kernel=$(uname -r) $(uname -v)"
+# what restarted the board last time, as far as the watchdog driver knows (needs WATCHDOG_SYSFS)
+b=$(cat /sys/class/watchdog/watchdog0/bootstatus 2>/dev/null)
+case "$b" in
+    "") ;;
+    32) echo "last_reset=watchdog" ;;
+    0) echo "last_reset=not the watchdog (power, the backplate, a restart that was asked for)" ;;
+    *) echo "last_reset=bootstatus $b" ;;
+esac

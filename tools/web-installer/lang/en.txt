@@ -141,3 +141,6 @@ sup.other=iPhone and iPad; Firefox; Safari
 sup.other.s=Does not work
 sup.other.n=These have no WebUSB. On an iPhone or iPad no browser has it.
 sup.cable=Use a USB cable that carries data: many micro-USB cables only charge. Connect directly, without a hub, when something does not work.
+warn.5=Work in progress: sleeping does not work well yet, and on a backplate the battery of the thermostat runs empty within about a night. For experiments, or on a USB supply.
+rel.title=What this installs
+rel.more=The release on GitHub

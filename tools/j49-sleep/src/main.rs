@@ -26,8 +26,10 @@ const SETTINGS: &str = "/var/lib/j49/sleep";
 const STATE: &str = "/run/j49-sleep.state";
 const TTY_WAKE: &str = "/sys/devices/platform/68000000.ocp/49020000.serial/tty/ttyS2/power/wakeup";
 const RTC_ALARM: &str = "/sys/class/rtc/rtc0/wakealarm";
-/// With the heating in mode "heat" the room can cool below the target while we sleep; the
-/// control loop must look again at least this often.
+/// With the heating in mode "heat" the room can cool below the target while we sleep, or reach
+/// it while the heat is on; the control loop must look again at least this often. The backplate
+/// is asked to wake us when the temperature changes, but how well it does that is not measured
+/// yet (the log line of every wake says what it saw); until then this stays short.
 const MAX_SLEEP_HEATING: u64 = 300;
 // wake mask bits of the backplate (docs/backplate-protocol.md)
 const WAKE_TIMER: u16 = 0x0001;
@@ -125,7 +127,13 @@ fn blocker(c: &Cfg, awake_since: Instant) -> Result<u64, &'static str> {
     let heat = kv("/run/bpd/heat");
     match num(&heat, "t") {
         Some(t) if unix_now() <= t + 30 => {
-            if num(&heat, "demand") == Some(1) || num(&heat, "relay") == Some(1) || num(&heat, "wait").unwrap_or(0) > 0 {
+            // About to switch (the waiting time before a start runs): stay for that. With the
+            // heat simply on we may sleep: the backplate holds the switch and wakes us when
+            // the temperature changes; when we never come back, its watchdog switches the heat
+            // off after the quiet time plus 30 minutes (docs/backplate-heatlink-flow.md).
+            // (no relay state at all: no backplate, nothing is pending)
+            let pending = matches!((num(&heat, "demand"), num(&heat, "relay")), (Some(d), Some(r)) if d != r);
+            if num(&heat, "wait").unwrap_or(0) > 0 || pending {
                 return Err("heat");
             }
             if heat.get("mode").map(|m| m == "heat").unwrap_or(false) {
@@ -270,17 +278,41 @@ fn sleep_once(c: &Cfg, secs: u64) -> Option<(u64, String)> {
     let _ = std::fs::write(RTC_ALARM, format!("+{}", secs + if backplate { 20 } else { 0 }));
     let _ = Command::new("sync").status();
     println!("sleeping for at most {secs} s (backplate {}, wake-on-WLAN {})", if backplate { "quiet" } else { "absent" }, if wow { "set" } else { "NOT set" });
+    let temp0 = kv("/run/bpd/sht20").get("temp").cloned().unwrap_or_default();
     let before = unix_now();
     // the write returns after the wake; it reports an error although the board slept, because
     // two power domains do not reach their target state (docs/sleep-j49.md)
     let _ = std::fs::write("/sys/power/state", "mem");
     let slept = unix_now().saturating_sub(before);
     let reason = wake_reason();
+    let mut detail = String::new();
     let _ = std::fs::write(RTC_ALARM, "0");
     if backplate {
         let _ = std::fs::write("/run/bpd/quiet-end", ""); // bpd talks again, the backplate streams
     }
-    println!("awake after {slept} s, woken by {reason}");
+    // A wake by the backplate before the time was up: for the temperature, or for movement? Its
+    // call does not say; what it sends in the first seconds after it does.
+    if reason == "backplate" && slept + 3 < secs {
+        std::thread::sleep(Duration::from_secs(3));
+        let temp1 = kv("/run/bpd/sht20").get("temp").cloned().unwrap_or_default();
+        let moved = num(&kv("/run/bpd/pir"), "motion_t").map(|t| t + 5 >= unix_now()).unwrap_or(false);
+        detail = format!(" ({}{})", if moved { "movement" } else { "no movement" }, if temp0 != temp1 { format!(", temperature {temp0} -> {temp1}") } else { ", temperature the same".into() });
+    }
+    println!("awake after {slept} s, woken by {reason}{detail}");
+    // Seen on 27/28 November 2026: after some resumes the I2C bus of the power chip (TWL4030) is
+    // stuck ("timeout waiting for bus ready"). Every later resume then fails for the regulators
+    // and the WiFi card, and the thermostat stays unreachable for hours. The clock sits on that
+    // bus: when it cannot be read any more, only a restart helps. Better one minute of restart
+    // than hours without a network.
+    if std::path::Path::new("/sys/class/rtc/rtc0").exists() && std::fs::read_to_string("/sys/class/rtc/rtc0/since_epoch").is_err() {
+        std::thread::sleep(Duration::from_secs(2));
+        if std::fs::read_to_string("/sys/class/rtc/rtc0/since_epoch").is_err() {
+            println!("the power chip does not answer after this resume (I2C bus stuck): restarting");
+            let _ = std::fs::write("/var/lib/j49/last-i2c-restart", format!("t={}\n", unix_now()));
+            let _ = std::process::Command::new("systemctl").args(["reboot", "--force"]).status();
+            std::thread::sleep(Duration::from_secs(60));
+        }
+    }
     Some((slept, reason))
 }
 

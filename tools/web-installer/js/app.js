@@ -101,6 +101,40 @@ function guard(id, button, work) {
 }
 
 // ---------- step 1: files ----------
+/** The text of the release whose images this page installs, from GitHub, as plain elements
+ *  (nothing of it is used as HTML). images/release.json names it: {"repo": "owner/name", "tag": "..."}. */
+async function showRelease() {
+  let rel;
+  try { rel = JSON.parse(await getText("images/release.json")); } catch (e) { return; }
+  if (!rel || !/^[\w.-]+\/[\w.-]+$/.test(rel.repo || "") || !/^[\w.+-]+$/.test(rel.tag || "")) return;
+  let r;
+  try {
+    const res = await fetch("https://api.github.com/repos/" + rel.repo + "/releases/tags/" + rel.tag, FRESH);
+    if (!res.ok) return;
+    r = await res.json();
+  } catch (e) { return; }
+  const plain = t => t.replace(/\*\*|`/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1");
+  const body = $("rel-body"); body.textContent = "";
+  let list = null, pre = null;
+  for (const raw of String(r.body || "").split(/\r?\n/)) {
+    const line = raw.trimEnd();
+    const add = (tag, text) => { const e = document.createElement(tag); e.textContent = plain(text); return e; };
+    if (line.startsWith("|")) {                       // a table: as it is, in a fixed-width block
+      if (/^\|[\s:|-]+\|$/.test(line)) continue;
+      if (!pre) { pre = document.createElement("pre"); body.append(pre); }
+      pre.textContent += plain(line.replace(/^\||\|$/g, "").replace(/\|/g, "   ")) + "\n"; list = null; continue;
+    }
+    pre = null;
+    if (/^#+ /.test(line)) { body.append(add("h3", line.replace(/^#+ /, ""))); list = null; }
+    else if (/^[-*] /.test(line)) { if (!list) { list = document.createElement("ul"); body.append(list); } list.append(add("li", line.slice(2))); }
+    else if (line.trim()) { body.append(add("p", line)); list = null; }
+    else list = null;
+  }
+  $("rel-name").textContent = (r.name || rel.tag) + (r.prerelease ? " (pre-release)" : "");
+  const url = String(r.html_url || "");
+  if (url.startsWith("https://github.com/")) $("rel-link").href = url; else $("rel-link").hidden = true;
+  $("s-release").hidden = false;
+}
 async function loadManifest() {
   try { manifest = JSON.parse(await getText("images/manifest.json")); } catch (e) { manifest = null; }
 }
@@ -397,6 +431,7 @@ $("insecure").hidden = window.isSecureContext;
 $("windows").hidden = !/Windows/.test(navigator.userAgent);
 await loadManifest();
 $("images-note").hidden = !manifest;
+showRelease();
 const start = () => { const ok = usable && window.isSecureContext && $("agree").checked; document.querySelectorAll("[data-mode]").forEach(b => b.disabled = !ok); };
 $("agree").onchange = start; start();
 document.querySelectorAll("[data-mode]").forEach(b => b.onclick = () => {

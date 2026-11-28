@@ -328,11 +328,11 @@ way to get one. It looks at `wpa_supplicant` every 5 seconds:
 | Situation | What it does |
 |---|---|
 | No network configured (25 s after start) | opens the hotspot |
-| Networks configured, none joined for 5 minutes | opens the hotspot |
+| Networks configured, none can be joined | nothing by itself: the hotspot is then a choice in Settings on the device |
 | Hotspot open, a network was added | closes it; the thermostat joins the network |
 | Hotspot open for 10 minutes, networks configured | closes it and tries them again (the router may have been off) |
 | "WiFi hotspot" switched on in Settings on the device | opens the hotspot at once, also when a network is joined (the thermostat leaves that network while the hotspot is open) |
-| "WiFi hotspot" switched off there | closes it; without networks it opens again after 5 minutes |
+| "WiFi hotspot" switched off there | closes it; it does not open again by itself until the next start |
 | WiFi switched off on the device | no hotspot |
 
 The hotspot is an extra network in the running `wpa_supplicant` (`mode=2`, name
@@ -353,7 +353,7 @@ reachable from the hotspot as it is from the home network.
 
 Done on a device on 27 November 2026: the hotspot after a fresh install, and adding the home
 network through it on the web page, after which the thermostat joined that network. The other
-rows of the table (five minutes without a network, the ten-minute retry, the menu row) have
+rows of the table (the ten-minute end of a hotspot that was asked for, the menu row) have
 unit tests and ran against a stand-in for `wpa_supplicant` on a PC.
 
 ## Web page (j49-web)

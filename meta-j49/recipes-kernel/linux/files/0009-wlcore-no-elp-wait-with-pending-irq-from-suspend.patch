@@ -1,0 +1,44 @@
+From: J49 project <j49@users.noreply.github.com>
+Subject: [PATCH] wlcore: do not wait for the ELP interrupt when one is pending from suspend
+
+When the chip raises its interrupt while the host is suspended, wlcore_irq()
+sets WL1271_FLAG_PENDING_WORK and disables the interrupt until
+wl1271_op_resume() has run the work. wl1271_op_resume() first calls
+pm_runtime_force_resume(), and wlcore_runtime_resume() then waits for a
+completion that only wlcore_irq() can signal. With the interrupt disabled it
+never comes: "ELP wakeup timeout!" after 500 ms, an intended firmware
+recovery, a firmware reboot and a new association on every resume in which
+the chip had something to say.
+
+Seen on the Nest J49 (WL1271 on SDIO, wake-on-WLAN armed) on every resume:
+
+  wlcore: WARNING ELP wakeup timeout!
+  wlcore: ERROR HW watchdog interrupt received! starting recovery.
+  wlcore: WARNING could not set wake up conditions: -5
+  wlcore: ERROR resume: wake up conditions failed: -5
+  ieee80211 phy1: Hardware restart was requested
+
+The chip that holds its interrupt line is awake. Do the wake-up write, give
+it a moment, and let wl1271_op_resume() run the pending work.
+
+Upstream-Status: Pending
+---
+--- a/drivers/net/wireless/ti/wlcore/main.c	2026-11-28 00:23:27.923168725 +0100
++++ b/drivers/net/wireless/ti/wlcore/main.c	2026-11-28 00:23:27.935990013 +0100
+@@ -6670,6 +6670,16 @@
+ 	ret = wlcore_raw_write32(wl, HW_ACCESS_ELP_CTRL_REG, ELPCTRL_WAKE_UP);
+ 	if (ret < 0) {
+ 		recovery = true;
++	} else if (test_bit(WL1271_FLAG_PENDING_WORK, &wl->flags)) {
++		/*
++		 * The chip raised its interrupt while the host was suspended:
++		 * wlcore_irq() noted the work and disabled the interrupt, so
++		 * the completion below can never come. The chip is awake (it
++		 * holds its interrupt line), give it the moment it needs
++		 * after the wake-up write and go on; the pending work is run
++		 * by wl1271_op_resume().
++		 */
++		usleep_range(5000, 6000);
+ 	} else if (!test_bit(WL1271_FLAG_IRQ_RUNNING, &wl->flags)) {
+ 		ret = wait_for_completion_timeout(&compl,
+ 			msecs_to_jiffies(WL1271_WAKEUP_TIMEOUT));

@@ -1,5 +1,19 @@
 # Sleep on our own system: what works (J49, kernel 6.6.64)
 
+> **State on 28 November 2026: sleeping does not work well enough, and on a backplate the
+> battery runs empty within about a night.** Known so far:
+> - After some resumes the I2C bus of the power chip (TWL4030) is stuck ("timeout waiting for
+>   bus ready"). Every later resume then fails for the regulators and the WiFi card; the
+>   thermostat is unreachable until it restarts. `j49-sleep` restarts the board when it sees
+>   this (written, not yet seen at work). What makes the bus stick the first time is not known.
+> - Every resume restarted the WiFi chip (a wait in the driver that cannot end; patch 0009,
+>   being tested).
+> - The core power domain does not reach its low state in suspend, so a sleep saves less than
+>   it should. Stock reaches "off".
+> - The chip cannot keep the MQTT connection alive by itself as stock does for its own
+>   connection, so the head unit wakes for it.
+> The rest of this document is the record of how it was built and what was measured.
+
 How stock does it is in `sleep-stock.md`. This file records what was tried on our system.
 "Observed" = seen on the device; "inferred" = concluded from that; "unknown" = not established.
 
@@ -121,7 +135,7 @@ thermostat in a living room was woken every few seconds to a minute for as long 
 in the room. What the stock firmware asks the backplate for when it sleeps was not captured.
 
 It suspends only when all of this holds: enabled; up for 2 minutes; awake for `idle` seconds; the
-panel is asleep; `bpd` reports no heat demand, no relay on and no waiting time; no SSH session
+panel is asleep; `bpd` reports no switch pending and no waiting time; no SSH session
 (more than one `dropbear`); no web login question open and no request to the web page in the last
 minute. Otherwise `/run/j49-sleep.state` names the reason (`why=`).
 
@@ -164,8 +178,14 @@ asleep, hours of running, and what it saves.
 
 1. Done (see above): the backplate goes quiet with `0xa4` + `0xa1` as the last frame, and wakes
    the head unit from suspend. Open: the wake mask bits other than the timer, and the kernel bug.
-2. Heating while asleep: stock hands limits to the backplate (`SetSafetyTempSettings`), not
-   decoded. Until then: sleep only with no heat demand, and wake on temperature (`0xa4` bit 4).
+2. Heating while asleep. Decoded on 28 November 2026 (see `backplate-heatlink-flow.md`): the
+   backplate of the Heat Link has no safety temperature, but it holds the switch while the head
+   unit is silent and its watchdog switches the heat off after the quiet time plus 30 minutes.
+   So `j49-sleep` sleeps with the heat on too (at most 300 s at a time while the mode is
+   "heat"), and stays awake only while a switch is pending. Written, not yet run on a device.
+   Every early wake by the backplate is logged with what was seen right after it
+   ("movement" or not, the temperature before and after), to find out how well the wake on
+   temperature works; then the 300 s can go up.
 3. PER and CORE must reach retention, or suspend saves little.
 4. Done: `j49-sleep` (above). Open: testing it on the backplate.
 5. The backplate resets the head unit after about 29 minutes without `0xa1`: the maximum sleep

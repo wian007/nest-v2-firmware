@@ -1,7 +1,7 @@
 // j49-wifi: a way to set up WiFi on a thermostat that has no network.
 //
-// When no network is configured, or none could be joined for WAIT_SECS, the thermostat becomes
-// a WiFi access point itself ("J49-setup-A1B2", open). Somebody connects a phone or laptop to
+// When no network is configured at all, or when the menu of the device asks for it, the
+// thermostat becomes a WiFi access point itself ("J49-setup-A1B2", open). Somebody connects a phone or laptop to
 // it and opens the web page of the thermostat (http://192.168.4.1/, j49-web); login there is
 // confirmed on the device with the ring, as always, and the WiFi block of the page adds the
 // home network. As soon as a network was added the access point closes and the thermostat
@@ -29,7 +29,6 @@ const STATE: &str = "/run/j49-wifi.state";
 const WANT: &str = "/run/j49-wifi.want"; // "on" / "off": the hotspot row in the menu of the screen
 const AP_NETWORK: &str = "/run/systemd/network/70-wlan0-setup.network";
 const AP_IP: &str = "192.168.4.1";
-const WAIT_SECS: u64 = 300; // without a connection for this long: open the access point
 const AP_SECS: u64 = 600; // with networks configured: close it after this long and try them again
 const BOOT_SECS: u64 = 25; // after start: give wpa_supplicant time before deciding anything
 
@@ -105,7 +104,11 @@ fn decide(wifi_on: bool, connected: bool, configured: usize, ap: bool, secs: u64
     if connected || uptime < BOOT_SECS {
         return Step::Stay;
     }
-    if (configured == 0 && !held) || secs >= WAIT_SECS {
+    // By itself only for a thermostat that has no network at all (a fresh install), and not
+    // again after it was closed by hand. With networks configured the hotspot is a choice in
+    // the menu: a router that is away for a while must not put an open hotspot on the wall.
+    let _ = secs;
+    if configured == 0 && !held {
         return Step::OpenAp;
     }
     Step::Stay
@@ -194,7 +197,7 @@ fn main() {
     let ssid = ap_ssid();
     let mut ap: Option<(u32, usize)> = None; // (network id, networks configured when it opened)
     let mut since = Instant::now(); // start of "not connected" or of the access point
-    let mut held = false; // closed from the menu: not opened again before WAIT_SECS
+    let mut held = false; // closed from the menu: not opened again by itself
     // an access point of ours left behind by an earlier run of this program
     if let Some(list) = wpa("LIST_NETWORKS") {
         for (id, _, ours) in networks(&list, &ssid) {
@@ -298,9 +301,9 @@ mod tests {
         // no network configured: the access point opens once the start-up time is over
         assert_eq!(decide(true, false, 0, false, 0, false, 5, false, false), Stay);
         assert_eq!(decide(true, false, 0, false, 30, false, 30, false, false), OpenAp);
-        // networks configured but none joined: only after five minutes
+        // networks configured but none joined: never by itself, however long
         assert_eq!(decide(true, false, 2, false, 299, false, 999, false, false), Stay);
-        assert_eq!(decide(true, false, 2, false, 300, false, 999, false, false), OpenAp);
+        assert_eq!(decide(true, false, 2, false, 99_999, false, 99_999, false, false), Stay);
         // access point open, nothing configured: it stays open
         assert_eq!(decide(true, false, 0, true, 99_999, false, 99_999, false, false), Stay);
         // a network was added through the page: close and join it
@@ -311,9 +314,9 @@ mod tests {
         // asked for in the menu: at once, also when connected; it ends like any other
         assert_eq!(decide(true, true, 1, false, 0, false, 9999, true, false), OpenAp);
         assert_eq!(decide(true, false, 1, true, 600, false, 9999, true, false), CloseAp);
-        // closed from the menu with nothing configured: not again at once, but after five minutes
+        // closed from the menu with nothing configured: not again by itself
         assert_eq!(decide(true, false, 0, false, 10, false, 9999, false, true), Stay);
-        assert_eq!(decide(true, false, 0, false, 300, false, 9999, false, true), OpenAp);
+        assert_eq!(decide(true, false, 0, false, 99_999, false, 99_999, false, true), Stay);
         // WiFi switched off on the device: no access point
         assert_eq!(decide(false, false, 0, false, 9999, false, 9999, false, false), Stay);
         assert_eq!(decide(false, false, 0, true, 10, false, 9999, false, false), CloseAp);
